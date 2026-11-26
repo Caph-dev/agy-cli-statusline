@@ -18,6 +18,15 @@ From a checkout, run `node bin/agy-cli-statusline.mjs`.
 
 Choose **English** or **简体中文**, then press **Enter**. Use the editor to select a preset, change the style or color depth, and save. On first launch, the command also registers the footer. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
 
+## Reorder segments
+
+1. Select **segments** and press **Enter** to open the layout editor.
+2. Use **↑** and **↓** to select an enabled segment. Press **Enter** to pick it up.
+3. Use **↑** and **↓** to move the segment, then press **Enter** to drop it. The preview updates as you move it. Press **Esc** while moving to undo the move.
+4. Press **Ctrl+S** to save, or **Esc** to return to settings.
+
+Press **Space** to enable or disable a segment. New segments appear at the end.
+
 ## Configure from inside agy
 
 Install the plugin from GitHub.

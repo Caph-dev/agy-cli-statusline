@@ -67,6 +67,32 @@ test('quota windows display usage and the original five-cell gauge rounds as bef
   assert.match(stripAnsi(render({ preset: 'focus-legacy' }, input)), /19% #----/);
 });
 
+test('preset layout keeps row slots while a legacy custom order stays flat', () => {
+  const dashboard = normalizePreferences({ preset: 'dashboard' });
+  const moved = normalizePreferences({ ...dashboard, segments: ['model', 'dir', 'cost', 'git', 'context', 'quota.5h', 'cache', 'worktree'], layout: 'preset' });
+  assert.equal(moved.layout, 'preset');
+  assert.deepEqual(presetRows(moved)[0].right.map((item) => item.metric), ['git']);
+  assert.equal(presetRows(moved)[1].left[0].bar, 'eighths');
+  const acrossRows = normalizePreferences({ ...moved,
+    segments: ['model', 'dir', 'cost', 'context', 'git', 'quota.5h', 'cache', 'worktree'],
+    layout: [[3, 1], [2, 1], [1, 0]],
+  });
+  assert.deepEqual(presetRows(acrossRows)[0].right[0], { metric: 'context', bar: 'eighths', cells: 10 });
+  const removed = normalizePreferences({ ...acrossRows,
+    segments: acrossRows.segments.filter(metric => metric !== 'cost'), layout: [[2, 1], [2, 1], [1, 0]],
+  });
+  assert.deepEqual(presetRows(removed)[0].left.map(item => item.metric), ['model', 'dir']);
+  assert.equal(presetRows(removed)[0].right[0].metric, 'context');
+  assert.throws(() => normalizePreferences({ ...removed, layout: [[3, 1]] }), /layout counts/);
+  const extended = normalizePreferences({ preset: 'minimal', segments: ['model', 'context', 'cache', 'cost', 'state'], layout: 'preset' });
+  assert.equal(presetRows(extended).length, 2);
+  assert.deepEqual(presetRows(extended)[1].left.map((item) => item.metric), ['state']);
+  const legacy = normalizePreferences({ preset: 'dashboard', segments: ['worktree', 'model'] });
+  assert.equal(legacy.layout, undefined);
+  assert.equal(presetRows(legacy).length, 1);
+  assert.throws(() => normalizePreferences({ preset: 'dashboard', layout: 'grid' }), /unknown layout/);
+});
+
 test('version-one Focus migrates without overwriting custom settings', () => {
   const previous = normalizePreferences({ version: 1, preset: 'focus', skin: 'bracket' });
   assert.equal(previous.preset, 'focus-legacy');

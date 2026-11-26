@@ -161,7 +161,9 @@ function resolveWrite(current, flags) {
   if (Object.keys(explicitFlags).length === 0) return current.preferences;
   const preset = explicitFlags.preset;
   const base = preset ? { preset } : current.preferences;
-  return normalizePreferences({ ...base, ...explicitFlags });
+  const options = { ...base, ...explicitFlags };
+  if (explicitFlags.segments) delete options.layout;
+  return normalizePreferences(options);
 }
 
 function explicit(flags) {
