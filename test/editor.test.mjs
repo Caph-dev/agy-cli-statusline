@@ -96,7 +96,7 @@ test('the layout panel grabs, moves, and restores one segment without wrapping',
     stdin, stdout,
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
   press(stdin, '\r', { name: 'return' });
   assert.match(frameText(stdout), /Segment layout/);
   assert.match(frameText(stdout), /Cost\s+enabled\s+row 1 right/);
@@ -206,4 +206,154 @@ test('the editor toggles 5h and 7d quota pace estimates in the live preview', as
     assert.equal(pwrSaved.quotaPace, 'show');
     assert.equal(pwr.stdin.isRaw, false);
   }
+});
+
+test('the editor configures the directory style and updates the live preview', async () => {
+  for (const [language, label, value] of [
+    ['en', 'dir style', 'name'],
+    ['zh', '目录样式', '仅末级'],
+  ]) {
+    const { stdin, stdout } = terminal();
+    stdout.columns = 120;
+    stdout.rows = 30;
+    const frames = [];
+    stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+    let saved;
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'cometix' }),
+      stdin, stdout, language,
+      onSave: async (preferences) => { saved = preferences; },
+    });
+    for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
+    press(stdin, undefined, { name: 'right' });
+    assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${value}`));
+    assert.doesNotMatch(frameText(stdout), /…\/atlas/);
+    assert.match(frameText(stdout), /\batlas\b/);
+    press(stdin, '\r', { name: 'return' });
+    assert.equal((await result).saved, true);
+    assert.equal(saved.dirStyle, 'name');
+    assert.equal(stdin.isRaw, false);
+  }
+});
+
+test('the layout editor modifies widget, icon, and format on enabled segments with live preview', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'dashboard' }),
+    stdin, stdout,
+    onSave: async (preferences) => { saved = preferences; },
+  });
+
+  // Open layout mode (field index 8 = segments)
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  assert.match(frameText(stdout), /Segment layout/);
+
+  // Model (index 0) does NOT support multiple widgets, so widget control is hidden
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /Edit segment: Model/);
+  assert.doesNotMatch(frameText(stdout), /\bwidget\b/);
+  assert.match(frameText(stdout), /\bicon\b/);
+  assert.match(frameText(stdout), /\bformat\b/);
+  press(stdin, undefined, { name: 'escape' });
+  assert.match(frameText(stdout), /Segment layout/);
+
+  // Move to Context (index 4 in dashboard: model, dir, git, cost, context)
+  for (let step = 0; step < 4; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /Edit segment: Context/);
+  assert.match(frameText(stdout), /> widget\s+default \(bar\)/);
+  assert.match(frameText(stdout), /▏/); // eighths bar is visible in preview
+
+  // Cycle widget: default (bar) -> gauge (icon control hides because gauge replaces icon!)
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> widget\s+gauge/);
+  assert.doesNotMatch(frameText(stdout), /\bicon\b/);
+  assert.doesNotMatch(frameText(stdout), /▏/);
+
+  // Cycle widget: gauge -> text (icon control returns, bar stays gone!)
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> widget\s+text/);
+  assert.match(frameText(stdout), /\bicon\b/);
+
+  // Move to icon and cycle to none (""), then type custom icon '*'
+  press(stdin, undefined, { name: 'down' });
+  assert.match(frameText(stdout), /> icon/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> icon\s+\(none\)/);
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, '*', {});
+  assert.match(frameText(stdout), /\* 42%/);
+  press(stdin, '\r', { name: 'return' });
+
+  // Move to format, cycle to ratio, then type custom format and verify Esc restores
+  press(stdin, undefined, { name: 'down' });
+  assert.match(frameText(stdout), /> format/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /42% · 84k\/200k/);
+
+  // Test inline typing with Backspace and Esc cancel
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, '!', {});
+  assert.match(frameText(stdout), /42% · 84k\/200k!/);
+  press(stdin, undefined, { name: 'escape' });
+  assert.doesNotMatch(frameText(stdout), /200k!/);
+
+  // Type a custom template using {left} and commit with Enter
+  press(stdin, '\r', { name: 'return' });
+  for (let i = 0; i < 40; i += 1) press(stdin, undefined, { name: 'backspace' });
+  for (const ch of '{pct}% ({left} left)') press(stdin, ch, {});
+  assert.match(frameText(stdout), /42% \(116k left\)/);
+  press(stdin, '\r', { name: 'return' });
+
+  // Return to layout: Context shows custom marker
+  press(stdin, undefined, { name: 'escape' });
+  assert.match(frameText(stdout), /Context\s+enabled\s+row 2 left · custom/);
+
+  // Pressing 'e' on a disabled segment (Quota) does not open the block editor
+  for (let step = 0; step < 4; step += 1) press(stdin, undefined, { name: 'down' });
+  assert.match(frameText(stdout), /> Quota\s+off/);
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /Segment layout/);
+
+  // Save with Ctrl-S and verify persisted items
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.deepEqual(saved.items, {
+    context: { widget: 'text', icon: '*', format: '{pct}% ({left} left)' },
+  });
+  assert.equal(stdin.isRaw, false);
+});
+
+test('the layout editor supports Chinese single-block labels and r reset', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 30;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'budget' }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  // Edit first enabled segment (quota.5h)
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /编辑区块：5 小时配额/);
+  assert.match(frameText(stdout), /> 组件\s+默认 \(pace\)/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 组件\s+bar/);
+  // Reset back to default with r
+  press(stdin, 'r', { name: 'r' });
+  assert.match(frameText(stdout), /> 组件\s+默认 \(pace\)/);
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.items, undefined);
 });

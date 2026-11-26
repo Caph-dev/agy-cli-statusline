@@ -33,7 +33,6 @@ Usage
   agy-cli-statusline
   agy-cli-statusline configure [options]
   agy-cli-statusline preview [options]
-  agy-cli-statusline tps [--model ID] <prompt>
   agy-cli-statusline --help
 
 configure options
@@ -45,17 +44,12 @@ configure options
   --color-depth MODE     auto | truecolor | 256 | 16 | none
   --context-format MODE  ${enumNames("contextFormat").join(" | ")}
   --quota-pace MODE      ${enumNames("quotaPace").join(" | ")}
+  --dir-style MODE       ${enumNames("dirStyle").join(" | ")}
   --segments CSV         ordered ids: ${SEGMENT_IDS.join(",")}
   --replace              replace a statusLine command this tool does not own
 
 preview options
   the same style and layout options as configure; no files are written
-
-tps options
-  --model ID             select an agy model
-  --                     treat subsequent arguments as prompt text
-  Runs agy in print mode. Streams its answer and reports estimated generation
-  tokens per second and the delay to first visible text on stderr.
 
 On a TTY, choose a language before opening the editor. First-time setup
 registers the status line; existing preferences are preserved. A statusLine owned by something else is not replaced without --replace
@@ -70,7 +64,6 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const root = io.root ?? configRoot();
   try {
     const command = argv[0] && !argv[0].startsWith("-") ? argv[0] : "";
-    if (command === "tps") return await measureTps(argv.slice(1), { stdout, stderr });
     const flags = parseArgs(command ? argv.slice(1) : argv);
     if (flags.help || argv.includes("--help") || argv.includes("-h")) {
       stdout.write(HELP);
@@ -90,25 +83,6 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   }
 }
 
-async function measureTps(args, { stdout, stderr }) {
-  if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
-    stdout.write(HELP);
-    return 0;
-  }
-  let model;
-  if (args[0] === "--model") {
-    model = args[1];
-    if (!model?.trim() || model.startsWith("-")) throw new UsageError("--model needs an agy model ID");
-    args = args.slice(2);
-  }
-  if (args[0] === "--") args = args.slice(1);
-  else if (args[0]?.startsWith("-")) throw new UsageError(`unknown tps option '${args[0]}'; use -- before a prompt starting with a dash`);
-  const prompt = args.join(" ");
-  if (!prompt.trim()) throw new UsageError("usage: agy-cli-statusline tps [--model ID] <prompt>");
-  const { runTps } = await import("../lib/tps.mjs");
-  return runTps({ prompt, model, stdout, stderr });
-}
-
 async function runDefault({ flags, root, stdin, stdout, stderr }) {
   const stray = Object.keys(flags).filter((key) => !["help", "show", "replace"].includes(key));
   if (stray.length > 0) {
@@ -122,7 +96,7 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
         `config root: ${root}`,
         current.ownership === "foreign"
           ? "a different statusLine is configured. Re-run with: configure --replace ..."
-          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--context-format MODE] [--quota-pace MODE] [--segments CSV]",
+          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--context-format MODE] [--quota-pace MODE] [--dir-style MODE] [--segments CSV]",
         "read the current state with: configure --show",
         "",
       ].join("\n"),
@@ -197,7 +171,7 @@ function resolveWrite(current, flags) {
 
 function explicit(flags) {
   const out = {};
-  for (const key of ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace"]) {
+  for (const key of ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "dirStyle"]) {
     if (flags[key] != null) out[key] = flags[key];
   }
   if (flags.segments != null) out.segments = parseSegments(flags.segments);
@@ -205,7 +179,7 @@ function explicit(flags) {
 }
 
 function hasWriteFlags(flags) {
-  return ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
+  return ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "dirStyle", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
 }
 
 function publicInfo(info) {
@@ -225,6 +199,7 @@ function publicInfo(info) {
       colorDepth: ["auto", "truecolor", "256", "16", "none"],
       contextFormat: enumNames("contextFormat"),
       quotaPace: enumNames("quotaPace"),
+      dirStyle: enumNames("dirStyle"),
       segments: SEGMENT_IDS,
     },
   };
@@ -246,11 +221,11 @@ function parseArgs(argv) {
       flags.replace = true;
       continue;
     }
-    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--context-format", "--quota-pace", "--segments"];
+    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--context-format", "--quota-pace", "--dir-style", "--segments"];
     if (!known.includes(token)) throw new UsageError(`unknown option '${token}'`);
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) throw new UsageError(`${token} needs a value`);
-    const flagMap = { "--color-depth": "colorDepth", "--context-format": "contextFormat", "--quota-pace": "quotaPace" };
+    const flagMap = { "--color-depth": "colorDepth", "--context-format": "contextFormat", "--quota-pace": "quotaPace", "--dir-style": "dirStyle" };
     flags[flagMap[token] ?? token.slice(2)] = value;
     index += 1;
   }

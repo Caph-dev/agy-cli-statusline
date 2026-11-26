@@ -1,6 +1,6 @@
 ---
 name: agy-cli-statusline-setup
-description: Install or configure the agy-cli-statusline footer, including its preset, theme, skin, icons, context format, quota pace deltas, and segments. Use when the user runs /agy-cli-statusline-setup or asks to configure this status line.
+description: Install or configure the agy-cli-statusline footer, including its preset, theme, skin, icons, directory style, context format, quota pace deltas, and segments. Use when the user runs /agy-cli-statusline-setup or asks to configure this status line.
 ---
 
 # Configure Status Line Studio

@@ -182,3 +182,47 @@ test('quota pace option toggles 5h and 7d pace deltas across presets', () => {
 
   assert.throws(() => normalizePreferences({ quotaPace: 'invalid' }), /unknown quota pace/);
 });
+
+test('quota windows display reset countdowns even at zero usage or right after reset when ETA is unavailable', () => {
+  // Zero usage right after reset: ETA is undefined, countdown is still meaningful
+  const fresh = {
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 1.0, reset_in_seconds: 18_000 },
+      { id: 'gemini-weekly', label: 'weekly', remaining_fraction: 1.0, reset_in_seconds: 604_800 },
+    ],
+  };
+  const freshBudget = stripAnsi(render({ preset: 'budget' }, fresh, 160));
+  assert.match(freshBudget, /5h 0% ±0% · 5h00m/);
+  assert.match(freshBudget, /7d 0% ±0% · 7d0h/);
+  assert.doesNotMatch(freshBudget, /ETA/);
+
+  const freshHidden = stripAnsi(render({ preset: 'budget', quotaPace: 'hide' }, fresh, 160));
+  assert.match(freshHidden, /5h 0% · 5h00m/);
+  assert.match(freshHidden, /7d 0% · 7d0h/);
+
+  // Zero usage partway through window: countdown and negative pace delta both show, still no ETA
+  const idle = {
+    quota: [{ id: 'gemini-5h', label: '5h', remaining_fraction: 1.0, reset_in_seconds: 9_000 }],
+  };
+  assert.match(stripAnsi(render({ preset: 'budget' }, idle, 160)), /5h 0% ⇣50% · 2h30m/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'budget' }, idle, 160)), /ETA/);
+
+  // Short durations (<1m and minutes) and combined quota segment
+  const soon = {
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 0.6, reset_in_seconds: 45 },
+      { id: 'gemini-weekly', label: 'weekly', remaining_fraction: 0.5, reset_in_seconds: 2_700 },
+    ],
+  };
+  const soonBudget = stripAnsi(render({ preset: 'budget', quotaPace: 'hide' }, soon, 160));
+  assert.match(soonBudget, /5h 40% · <1m/);
+  assert.match(soonBudget, /7d 50% · 45m/);
+
+  const studio = stripAnsi(render({ preset: 'studio', segments: ['quota'] }, soon, 120));
+  assert.match(studio, /5h 60% weekly 50% · <1m/);
+
+  // ASCII mode keeps output strictly ASCII
+  const ascii = stripAnsi(render({ preset: 'budget', icons: 'ascii', quotaPace: 'hide' }, fresh, 160));
+  assert.match(ascii, /5h 0% \/ 5h00m/);
+  assert.match(ascii, /^[\x20-\x7e]+$/);
+});

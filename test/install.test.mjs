@@ -136,3 +136,39 @@ test('configure --quota-pace persists pace delta visibility to the installed ren
   assert.match(output, /7d 20%/);
   assert.doesNotMatch(output, /[⇡⇣±]/);
 });
+
+test('configure --dir-style persists directory style to the installed renderer', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix', '--dir-style', 'parent'));
+  const shown = JSON.parse(succeeded(f.run('configure', '--show')));
+  assert.equal(shown.preferences.dirStyle, 'parent');
+  assert.deepEqual(shown.enums.dirStyle, ['auto', 'name', 'parent', 'tilde', 'short', 'full']);
+
+  const output = succeeded(f.render({
+    workspace: { current_dir: '/Users/ada/src/atlas' },
+    terminal_width: 100,
+  }));
+  assert.match(output, /src\/atlas/);
+});
+
+test('installed renderer applies persisted per-segment items overrides from statusline.json', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix'));
+  const prefsPath = join(f.directory, 'agy-cli-statusline', 'statusline.json');
+  const prefs = JSON.parse(readFileSync(prefsPath, 'utf8'));
+  prefs.items = {
+    context: { widget: 'text', icon: '#', format: '{pct}% ({left} free)' },
+  };
+  writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+
+  const output = succeeded(f.render({
+    model: { display_name: 'Fixture Model' },
+    context_window: {
+      used_percentage: 42,
+      current_usage: { input_tokens: 84_000, output_tokens: 0 },
+      context_window_size: 200_000,
+    },
+    terminal_width: 120,
+  }));
+  assert.match(output, /# 42% \(116k free\)/);
+});
