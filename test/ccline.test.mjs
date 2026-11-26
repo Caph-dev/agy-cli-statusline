@@ -3,7 +3,7 @@ import test from 'node:test';
 import { colorDepth, paint, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
 import { CCLINE_PALETTES, CCLINE_PRESETS } from '../lib/ccline-data.mjs';
 import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
-import { renderLine } from '../lib/render.mjs';
+import { gaugeIcon, renderLine } from '../lib/render.mjs';
 import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
 import { collectSegments } from '../lib/segments.mjs';
 
@@ -20,13 +20,17 @@ test('all upstream named presets render, keeping their supported rows and color 
   const rows = dashboard.split('\n');
   assert.equal(rows.length, 3);
   assert.match(stripAnsi(rows[0]), /Gemini.*main.*\$1\.284/);
-  assert.match(stripAnsi(rows[1]), /42%.*5h.*cache/);
+  assert.match(stripAnsi(rows[1]), /42%.*5h.*3:42 · 94% hit/);
   assert.match(stripAnsi(rows[2]), /atlas-feature/);
   assert.equal(visibleWidth(rows[0]), 160);
   assert.match(dashboard, /48;5;\d+/);
   assert.match(dashboard, /▀/);
   assert.match(render({ preset: 'zen' }), /^[\x20-\x7e]+$/);
+  assert.match(stripAnsi(render({ preset: 'zen' })), /cache 3:42/);
   assert.doesNotMatch(render({ preset: 'minimal', colorDepth: 'none' }), /◆|◔|≈|\x1b/);
+  assert.match(stripAnsi(render({ preset: 'minimal', colorDepth: 'none' })), /cache 3:42/);
+  const cacheAware = stripAnsi(render({ preset: 'cache-aware' }, samplePayload(), 160));
+  assert.match(cacheAware, /●●●●●○○○ warm 3:42 · 94% hit · 1× miss · last: tools changed/);
 });
 
 test('the 13 upstream palettes retain exact RGB data and have a 256-color rendering', () => {
@@ -96,7 +100,7 @@ test('preset layout keeps row slots while a legacy custom order stays flat', () 
     segments: ['model', 'context', 'dir'],
   });
   assert.equal(presetRows(flatCometix).length, 1);
-  assert.equal(presetRows(flatCometix)[0].left[1].widget, 'text');
+  assert.equal(presetRows(flatCometix)[0].left[1].widget, 'gauge');
   assert.equal(presetRows(flatCometix)[0].left[1].format, '{pct}%[ · {tokens} tokens]');
   assert.equal(presetRows(flatCometix)[0].left[2].icon_color, 'bright_yellow');
   assert.throws(() => normalizePreferences({ preset: 'dashboard', layout: 'grid' }), /unknown layout/);
@@ -234,4 +238,163 @@ test('quota windows display reset countdowns even at zero usage or right after r
   const ascii = stripAnsi(render({ preset: 'budget', icons: 'ascii', quotaPace: 'hide' }, fresh, 160));
   assert.match(ascii, /5h 0% \/ 5h00m/);
   assert.match(ascii, /^[\x20-\x7e]+$/);
+});
+
+test('cache segment aligns with CCometixLine warm/cold countdown, hit ratio, misses, cause, rewarm, and bar/gauge widgets', () => {
+  const baseNow = 1_790_812_800_000;
+  const renderCache = (options, payload, width = 160) => {
+    const prefs = normalizePreferences(options);
+    const segs = collectSegments(payload, prefs, null, { now: baseNow });
+    return {
+      segs,
+      text: stripAnsi(renderLine(segs, prefs, { width, color: false, env: {} })),
+    };
+  };
+
+  // Warm cache with absolute expires_at, hit_ratio, misses, cause, and Claude rewarm pricing ($1.14)
+  const warmPayload = {
+    model: { id: 'claude-opus-4-8', display_name: 'Opus 4.8' },
+    prompt_cache: {
+      warm: true,
+      caching_observed: true,
+      ttl: '5m',
+      expires_at: 1_790_813_022,
+      requests: 41,
+      misses: 1,
+      hit_ratio: 0.94,
+      last_miss_cause: { causes: ['tools_changed'] },
+      recache_tokens_if_cold: 182_000,
+    },
+  };
+  const warm = renderCache({ preset: 'cometix', segments: ['cache'] }, warmPayload);
+  assert.equal(warm.segs[0].tone, 'normal');
+  assert.equal(warm.segs[0].gauge, 74);
+  assert.equal(warm.segs[0].fields.rewarm, '$1.14');
+  assert.match(warm.text, /3:42 · 94% hit/);
+
+  // Expiring soon (< 60s on 5m TTL) switches to warn tone
+  const expiringPayload = {
+    ...warmPayload,
+    prompt_cache: { ...warmPayload.prompt_cache, expires_at: 1_790_812_842 },
+  };
+  const expiring = renderCache({ preset: 'cometix', segments: ['cache'] }, expiringPayload);
+  assert.equal(expiring.segs[0].tone, 'warn');
+  assert.match(expiring.text, /0:42 · 94% hit/);
+
+  // Cold cache (warm: false) renders cold, 0% bar, warn tone, misses and cause
+  const coldPayload = {
+    ...warmPayload,
+    prompt_cache: {
+      warm: false,
+      caching_observed: true,
+      ttl: '5m',
+      expires_at: null,
+      requests: 210,
+      misses: 6,
+      hit_ratio: 0.71,
+      last_miss_cause: { causes: ['ttl_expired_5m'] },
+      recache_tokens_if_cold: 182_000,
+    },
+  };
+  const coldAware = renderCache({ preset: 'cache-aware' }, coldPayload);
+  assert.equal(coldAware.segs.find(s => s.id === 'cache').tone, 'warn');
+  assert.equal(coldAware.segs.find(s => s.id === 'cache').gauge, 0);
+  assert.match(coldAware.text, /○○○○○○○○ cold · 71% hit · 6× miss · last: ttl expired 5m/);
+
+  // First request hides 0% hit ratio (exact CCometixLine behavior)
+  const freshPayload = {
+    prompt_cache: {
+      warm: true,
+      caching_observed: true,
+      ttl: '5m',
+      expires_at: 1_790_813_060,
+      requests: 1,
+      misses: 0,
+      hit_ratio: 0.0,
+    },
+  };
+  const fresh = renderCache({ preset: 'cometix', segments: ['cache'] }, freshPayload);
+  assert.match(fresh.text, /4:20$/);
+  assert.doesNotMatch(fresh.text, /hit/);
+
+  // caching_observed: false hides the cache segment completely
+  const unobserved = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    { prompt_cache: { caching_observed: false, warm: false } },
+  );
+  assert.equal(unobserved.segs.length, 0);
+
+  // current_usage-only fallback (no prompt_cache / no DB) computes hit% without orphan separator
+  const usageOnly = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    {
+      context_window: {
+        current_usage: {
+          input_tokens: 63_382,
+          output_tokens: 346,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 20_857,
+        },
+      },
+    },
+  );
+  assert.equal(usageOnly.segs[0].fields.hit, '25');
+  assert.equal(usageOnly.segs[0].fields.read, '20.9k');
+  assert.match(usageOnly.text, /\uf1c0 25% hit$/);
+  assert.doesNotMatch(usageOnly.text, /· 25%/);
+
+  // Backward compatibility: custom {read}/{created} and {rewarm} templates continue to work
+  const custom = renderCache(
+    {
+      preset: 'cometix',
+      segments: ['cache'],
+      items: { cache: { format: '[{left}][{cold}][ · rewarm {rewarm}][ · {read} read]' } },
+    },
+    { ...warmPayload, context_window: { current_usage: { cache_read_input_tokens: 120_988 } } },
+  );
+  assert.match(custom.text, /3:42 · rewarm \$1\.14 · 121k read/);
+
+  // cache-aware preset keeps 1-to-1 layout counts with unique segments
+  const awarePrefs = normalizePreferences({ preset: 'cache-aware' });
+  const totalSlots = presetRows(awarePrefs).reduce((sum, row) => sum + row.left.length + row.right.length, 0);
+  assert.equal(totalSlots, awarePrefs.segments.length);
+  const asciiAware = renderCache({ preset: 'cache-aware', icons: 'ascii' }, warmPayload).text;
+  assert.match(asciiAware, /^[\x20-\x7e\n]+$/);
+});
+
+test('context defaults to a dynamic proportional ring (gauge) with severity coloring', () => {
+  // Nerd Font: 0% empty outline + 8 proportional slices (1/8 .. 8/8)
+  assert.equal(gaugeIcon(0, 'nerd'), '\u{f0766}');
+  assert.equal(gaugeIcon(1, 'nerd'), '\u{f0a9e}');
+  assert.equal(gaugeIcon(25, 'nerd'), '\u{f0a9f}');
+  assert.equal(gaugeIcon(42, 'nerd'), '\u{f0aa0}');
+  assert.equal(gaugeIcon(50, 'nerd'), '\u{f0aa1}');
+  assert.equal(gaugeIcon(75, 'nerd'), '\u{f0aa3}');
+  assert.equal(gaugeIcon(100, 'nerd'), '\u{f0aa5}');
+
+  // Unicode: 0% empty circle + 4 proportional quarters
+  assert.equal(gaugeIcon(0, 'unicode'), '○');
+  assert.equal(gaugeIcon(1, 'unicode'), '◔');
+  assert.equal(gaugeIcon(42, 'unicode'), '◑');
+  assert.equal(gaugeIcon(75, 'unicode'), '◕');
+  assert.equal(gaugeIcon(100, 'unicode'), '●');
+
+  // Default presets cometix, powerline, cache-aware, and studio use the dynamic ring for context
+  for (const preset of ['cometix', 'powerline', 'cache-aware']) {
+    const out = stripAnsi(render({ preset }, samplePayload(), 160));
+    assert.match(out, /\u{f0aa0} 42%/u, preset);
+  }
+  assert.match(stripAnsi(render({ preset: 'studio' }, samplePayload(), 160)), /◑ 42%/);
+
+  // Dynamic ring updates icon and color by usage severity (normal <70%, warn >=70%, crit >=90%)
+  const renderCtx = (pct) => render(
+    { preset: 'cometix', colorDepth: '16', segments: ['context'] },
+    { context_window: { used_percentage: pct } },
+    80,
+  );
+  // terminal palette: context = 16:13 (brightMagenta -> 95), warn = 16:3 (yellow -> 33), crit = 16:1 (red -> 31)
+  assert.match(renderCtx(0), /\x1b\[95m\u{f0766}\x1b\[0m/u);
+  assert.match(renderCtx(42), /\x1b\[95m\u{f0aa0}\x1b\[0m/u);
+  assert.match(renderCtx(75), /\x1b\[33m\u{f0aa3}\x1b\[0m/u);
+  assert.match(renderCtx(95), /\x1b\[31m\u{f0aa5}\x1b\[0m/u);
 });

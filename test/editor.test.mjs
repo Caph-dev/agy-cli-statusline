@@ -330,6 +330,28 @@ test('the layout editor modifies widget, icon, and format on enabled segments wi
   assert.equal(stdin.isRaw, false);
 });
 
+test('the editor displays dynamic ring (gauge) as the default context widget in cometix with localized hint', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 30;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['context'] }),
+    stdin, stdout, language: 'zh',
+    onSave: async () => {},
+  });
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, 'e', { name: 'e' });
+  const frame = frameText(stdout);
+  assert.match(frame, /> 组件\s+默认 \(gauge\)\s+动态圆环/);
+  assert.match(frame, /\u{f0aa0} 42% · 84k tokens/u);
+  assert.doesNotMatch(frame, /\b图标\b/);
+  press(stdin, 'q', { name: 'q' });
+  assert.equal((await result).saved, false);
+});
+
 test('the layout editor supports Chinese single-block labels and r reset', async () => {
   const { stdin, stdout } = terminal();
   stdout.columns = 120;
@@ -375,10 +397,10 @@ test('the editor preview wraps full styles on narrow terminals and resolves samp
   });
   const initial = frameText(stdout);
   assert.match(initial, /\uef23 Gemini 2\.5 Pro high/);
-  assert.match(initial, /\uf49b 42% · 84k tokens/);
+  assert.match(initial, /\u{f0aa0} 42% · 84k tokens/u);
   assert.doesNotMatch(initial, /▰|▱/);
   assert.match(initial, /\u{f024b} ~\/…\/atlas/u);
-  assert.match(initial, /\uf1c0 cache 42k read · 1\.2k created/);
+  assert.match(initial, /\uf1c0 3:42 · 94% hit/);
   assert.match(initial, /\u{f0520} ▀▀▀▀▀▀▀▀ 7d 82% ⇡27% · 3d3h/u);
 
   // Move to dirStyle (index 7) and switch to tilde (~) and short (~/s/atlas)
@@ -457,6 +479,13 @@ test('every segment provides 3-5 unique Nerd Font icon alternatives and cycles c
   for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
   press(stdin, '\r', { name: 'return' });
   press(stdin, 'e', { name: 'e' });
+  // Cache now supports widget cycling (text -> bar -> gauge) as well as icons
+  assert.match(frameText(stdout), /> 组件\s+默认 \(text\)/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 组件\s+bar/);
+  press(stdin, 'r', { name: 'r' });
+  assert.match(frameText(stdout), /> 组件\s+默认 \(text\)/);
+  press(stdin, undefined, { name: 'down' });
   assert.match(frameText(stdout), /> 图标\s+默认/);
   press(stdin, undefined, { name: 'right' });
   assert.match(frameText(stdout), /> 图标\s+（无）/);

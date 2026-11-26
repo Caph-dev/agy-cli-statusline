@@ -16,7 +16,7 @@ npx agy-cli-statusline
 
 如果你已克隆仓库，在仓库根目录运行 `node bin/agy-cli-statusline.mjs`。
 
-选择 **English** 或 **简体中文**，按 **Enter** 确认。进入编辑器后，可以选择预设、调整样式、色深、目录样式（自动、仅末级、上级/末级、家目录、缩写、完整路径）、上下文显示格式（自动、仅百分比、百分比 · 已用、百分比 · 已用/上限，例如 `68% · 340k/500k`），以及 5h/7d 配额是否显示速率估算（如 `⇡5%`、`⇣53%`），再保存。配额窗口会显示重置倒计时，Git 区块会显示短 HEAD SHA，窄终端下超出宽度的行会保持完整样式自动折行，不会降级或丢弃区块。首次运行会注册状态栏。重新启动 `agy` 查看效果。如果你已配置其他状态栏，编辑器会先询问是否替换。确认替换后，安装器会备份原设置。
+选择 **English** 或 **简体中文**，按 **Enter** 确认。进入编辑器后，可以选择预设、调整样式、色深、目录样式（自动、仅末级、上级/末级、家目录、缩写、完整路径）、上下文显示格式（自动、仅百分比、百分比 · 已用、百分比 · 已用/上限，例如 `68% · 340k/500k`），以及 5h/7d 配额是否显示速率估算（如 `⇡5%`、`⇣53%`），再保存。上下文区块默认使用按用量比例动态填充的圆环（`gauge`：Nerd Font 9 阶 `󰝦`–`󰪥` / Unicode 5 阶 `○◔◑◕●`，≥70% 标黄、≥90% 标红；带进度条的 `dashboard`/`budget`/`focus` 预设保留其进度条）。配额窗口会显示重置倒计时，Git 区块会显示短 HEAD SHA，窄终端下超出宽度的行会保持完整样式自动折行，不会降级或丢弃区块。首次运行会注册状态栏。重新启动 `agy` 查看效果。如果你已配置其他状态栏，编辑器会先询问是否替换。确认替换后，安装器会备份原设置。
 
 ## 调整与编辑区块
 
@@ -64,6 +64,6 @@ agy plugin install https://github.com/Caph-dev/agy-cli-statusline
 node bin/agy-cli-statusline.mjs preview --preset dashboard --color-depth 256
 ```
 
-色深可选自动、真彩色、256 色、16 色和无色。自动模式读取 `COLORTERM` 和 `TERM`，`zen` 默认无色。状态栏使用 agy 提供的模型、上下文、额度、费用和缓存令牌数据；新增的 `tps`（生成速率 `tok/s`，支持 `{ttft}` / `{median}` 等模板字段）和 `cost.today`（按公开 API 标准价估算本地 0 点起的今日累计费用）通过 Node 内置 `node:sqlite` 只读读取本机 Antigravity 对话库（`~/.gemini/antigravity-cli/conversations/*.db`，带 mtime 缓存），当 agy 未提供 `cost` 时 `cost` 区块也会自动回退为当前对话的估算费用。Claude Code 更新、压缩阈值、上下文趋势和缓存到期时间等缺失指标会省略。五小时和七天额度分段需要 agy 提供可识别的配额窗口。
+色深可选自动、真彩色、256 色、16 色和无色。自动模式读取 `COLORTERM` 和 `TERM`，`zen` 默认无色。状态栏使用 agy 提供的模型、上下文、额度、费用和缓存令牌数据；`cache`（缓存）区块已对齐 CCometixLine（支持暖/冷缓存 TTL 倒计时、会话缓存命中率 `{hit}% hit`、未命中次数 `{misses}`、未命中原因 `{cause}`、冷缓存重建估算费用 `{rewarm}`，以及 `text` / `bar` / `gauge` 组件和 `cache-aware` 预设的点阵倒计时条），在 `prompt_cache` 缺失时自动从本机 Antigravity 对话库（`~/.gemini/antigravity-cli/conversations/*.db`）计算实时缓存状态，并在无对话库时回退到 `current_usage` 估算命中率。`tps`（生成速率 `tok/s`）与 `cost.today`（本地 0 点起今日估算费用）共用同一套只读 `node:sqlite` + mtime 缓存读取逻辑，且在 agy 未提供 `cost` 时 `cost` 区块自动回退为当前对话的估算费用。Claude Code 专属的更新提示、压缩阈值与上下文历史趋势等缺失指标会省略。五小时和七天额度分段需要 agy 提供可识别的配额窗口。
 
 CCometixLine 与 agy-zh-pack 的来源和许可证见[第三方声明](./THIRD_PARTY_NOTICES.md)。

@@ -14,7 +14,7 @@ function renderAt(options, width, { color = false, payload = samplePayload(), gi
 
 test('narrow terminals wrap overflowing rows at full fidelity without degrading or dropping segments', () => {
   const full = renderAt({ preset: 'zen' }, 120);
-  assert.equal(full, 'Gemini 2.5 Pro high | ctx 42% | cache 42k read / 1.2k created | $1.284');
+  assert.equal(full, 'Gemini 2.5 Pro high | ctx 42% | cache 3:42 | $1.284');
 
   for (const width of [50, 35]) {
     const wrapped = renderAt({ preset: 'zen' }, width);
@@ -23,7 +23,7 @@ test('narrow terminals wrap overflowing rows at full fidelity without degrading 
     for (const line of lines) assert.ok(visibleWidth(line) <= width, `${width}: ${line}`);
     assert.match(wrapped, /Gemini 2\.5 Pro high/);
     assert.match(wrapped, /ctx 42%/);
-    assert.match(wrapped, /cache 42k read \/ 1\.2k created/);
+    assert.match(wrapped, /cache 3:42/);
     assert.match(wrapped, /\$1\.284/);
   }
 });
@@ -39,7 +39,7 @@ test('multi-side rows wrap cleanly and keep full bars and labels instead of degr
   for (const line of lines) assert.ok(visibleWidth(line) <= 40, line);
   assert.match(lines[0], /◔.*▏ 42% · 84k/);
   assert.match(lines[1], /^\s+◆ Gemini 2\.5 Pro high$/);
-  assert.match(lines[2], /≈ cache 42k read · 1\.2k created/);
+  assert.match(lines[2], /≈ 3:42 · 94% hit/);
 });
 
 test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all segments for flat and legacy layouts', () => {
@@ -53,7 +53,7 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
   for (const line of studioLines) assert.ok(visibleWidth(line) <= 34, line);
   assert.match(studio, /~\/…\/atlas/);
   assert.match(studio, /main \* \+1 2f08999/);
-  assert.match(studio, /42% ██░░░/);
+  assert.match(studio, /◑ 42%/);
   assert.match(studio, /\bgit\b/);
 
   // 9-segment flat cometix layout on a 66-column terminal keeps every icon, full text, and all 9 segments
@@ -67,9 +67,9 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
   assert.ok(cometixLines.length >= 3, cometix);
   for (const line of cometixLines) assert.ok(visibleWidth(line) <= 66, line);
   assert.match(cometix, /\uef23 Gemini 2\.5 Pro high/);
-  assert.match(cometix, /\uf49b 42% · 84k tokens/);
-  assert.doesNotMatch(cometix, /▰|▱/); // cometix uses text widget for context even when layout is flat
-  assert.match(cometix, /\uf1c0 cache 42k read · 1\.2k created/);
+  assert.match(cometix, /\u{f0aa0} 42% · 84k tokens/u);
+  assert.doesNotMatch(cometix, /▰|▱/); // cometix uses dynamic ring gauge for context even when layout is flat
+  assert.match(cometix, /\uf1c0 3:42 · 94% hit/);
   assert.match(cometix, /\u{f024b} ~\/…\/atlas/u);
   assert.match(cometix, /\u{f02a2} main \* ↑1 2f08999/u);
   assert.match(cometix, /\uf1bb atlas-feature/);

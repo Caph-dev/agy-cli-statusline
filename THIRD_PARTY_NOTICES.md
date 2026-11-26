@@ -1,6 +1,6 @@
 # Third-party notices
 
-The preset and palette data and ANSI color conversion in this project are adapted from [CCometixLine 2.0.1](https://github.com/Haleclipse/CCometixLine/tree/1749ff85b52d8d10e67e0a04d247ceab768f380f). Its [package manifest](https://github.com/Haleclipse/CCometixLine/blob/1749ff85b52d8d10e67e0a04d247ceab768f380f/Cargo.toml) identifies Haleclipse as the author and declares the MIT license.
+The preset, palette, ANSI color conversion, and prompt-cache metric design (countdown/cold semantics, template fields, and fallback Claude input pricing) in this project are adapted from [CCometixLine 2.0.1](https://github.com/Haleclipse/CCometixLine/tree/1749ff85b52d8d10e67e0a04d247ceab768f380f). Its [package manifest](https://github.com/Haleclipse/CCometixLine/blob/1749ff85b52d8d10e67e0a04d247ceab768f380f/Cargo.toml) identifies Haleclipse as the author and declares the MIT license.
 
 ## MIT License
 
@@ -26,7 +26,7 @@ SOFTWARE.
 
 ---
 
-The local conversation database protobuf reader, API standard pricing table, generation speed (TPS), and today's cost estimation logic in `lib/telemetry.mjs` are adapted from [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng (MIT License).
+The local conversation database protobuf reader, API standard pricing table, generation speed (TPS), today's cost estimation, and cache-miss detection logic in `lib/telemetry.mjs` are adapted from [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng (MIT License).
 
 ## MIT License (agy-zh-pack)
 
