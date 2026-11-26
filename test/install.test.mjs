@@ -341,3 +341,57 @@ test('installed renderer applies persisted cache hit-only format overrides from 
     assert.equal(output, expected);
   }
 });
+
+test('configure supports multi-row --segments with / and | and --layout on built-in and upstream presets', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'studio', '--icons', 'none', '--segments', 'model,dir,git / context,cost'));
+  const shown = JSON.parse(succeeded(f.run('configure', '--show')));
+  assert.deepEqual(shown.preferences.layout, [[3, 0], [2, 0]]);
+  assert.ok(Array.isArray(shown.enums.layout));
+
+  const payload = {
+    model: { display_name: 'Fixture Model' },
+    workspace: { current_dir: '/Users/ada/src/atlas' },
+    context_window: { used_percentage: 42 },
+    cost: { total_usd: 1.284 },
+    terminal_width: 120,
+  };
+  const wide = succeeded(f.render(payload)).trimEnd().split('\n');
+  assert.equal(wide.length, 2);
+  assert.match(wide[0], /Fixture Model.*atlas/);
+  assert.match(wide[1], /42%.*\$1\.284/);
+
+  const narrow = succeeded(f.render({ ...payload, terminal_width: 24 })).trimEnd().split('\n');
+  assert.ok(narrow.length >= 3, narrow.join('\n'));
+  for (const line of narrow) assert.ok(line.length <= 24, line);
+  const ctxRow = narrow.findIndex(line => line.includes('42%'));
+  assert.ok(ctxRow >= 2, narrow.join('\n'));
+  assert.match(narrow[ctxRow], /^\s*◑ 42%/);
+
+  // Left/right split via '|' and '/'
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'none', '--segments', 'model,dir | cost / context'));
+  const splitShown = JSON.parse(succeeded(f.run('configure', '--show')));
+  assert.deepEqual(splitShown.preferences.layout, [[2, 1], [1, 0]]);
+  const splitOut = succeeded(f.render({ ...payload, terminal_width: 80 })).trimEnd().split('\n');
+  assert.equal(splitOut.length, 2);
+  assert.match(splitOut[0], /^Fixture Model.*\$1\.284$/);
+  assert.match(splitOut[1], /^◑ 42%/);
+
+  // Explicit --layout 2,2 and --layout flat
+  succeeded(f.run('configure', '--preset', 'studio', '--segments', 'model,dir,context,cost', '--layout', '2,2'));
+  assert.deepEqual(JSON.parse(succeeded(f.run('configure', '--show'))).preferences.layout, [[2, 0], [2, 0]]);
+  succeeded(f.run('configure', '--layout', 'flat'));
+  assert.equal(JSON.parse(succeeded(f.run('configure', '--show'))).preferences.layout, 'flat');
+
+  // Mismatched --layout exits non-zero without touching saved preferences
+  const before = JSON.parse(succeeded(f.run('configure', '--show'))).preferences;
+  const bad = f.run('configure', '--layout', '3,3');
+  assert.equal(bad.status, 2);
+  assert.deepEqual(JSON.parse(succeeded(f.run('configure', '--show'))).preferences, before);
+
+  // preview outputs 2 lines without writing files
+  const preview = fixture(t);
+  const previewOut = succeeded(preview.run('preview', '--preset', 'studio', '--icons', 'none', '--segments', 'model,dir / context,cost')).trimEnd().split('\n');
+  assert.equal(previewOut.length, 2);
+  assert.equal(existsSync(preview.settingsPath), false);
+});

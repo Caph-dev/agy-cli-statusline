@@ -611,3 +611,148 @@ test('the block editor cycles cache format presets to hit-only styles and saves'
   assert.equal((await result).saved, true);
   assert.equal(saved.items.cache.format, '{hit}%');
 });
+
+test('the editor switches layout mode on studio and dashboard with live preview and persists custom multi-row', async () => {
+  for (const [language, label, flatText, customText] of [
+    ['en', 'layout', 'auto wrap (1 row)', 'custom (2 rows + wrap)'],
+    ['zh', '布局', '自动折行 (单行)', '自定义多行 (2 行 + 自动折行)'],
+  ]) {
+    const { stdin, stdout } = terminal();
+    stdout.columns = 120;
+    stdout.rows = 32;
+    const frames = [];
+    stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+    let saved;
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'studio', segments: ['model', 'dir', 'git', 'context', 'cost', 'state'] }),
+      stdin, stdout, language,
+      onSave: async (preferences) => { saved = preferences; },
+    });
+    for (let step = 0; step < 9; step += 1) press(stdin, undefined, { name: 'down' });
+    assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${flatText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    press(stdin, undefined, { name: 'right' });
+    assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${customText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    press(stdin, '\r', { name: 'return' });
+    assert.equal((await result).saved, true);
+    assert.deepEqual(saved.layout, [[3, 0], [3, 0]]);
+    assert.equal(stdin.isRaw, false);
+  }
+
+  // Dashboard cycles preset -> custom -> flat -> preset
+  const dash = terminal();
+  dash.stdout.columns = 120;
+  dash.stdout.rows = 32;
+  const dashFrames = [];
+  dash.stdout.write = (frame) => { dashFrames.push(String(frame)); dash.stdout.frames = dashFrames; return true; };
+  let dashSaved;
+  const dashResult = runEditor({
+    preferences: normalizePreferences({ preset: 'dashboard' }),
+    stdin: dash.stdin, stdout: dash.stdout,
+    onSave: async (preferences) => { dashSaved = preferences; },
+  });
+  for (let step = 0; step < 9; step += 1) press(dash.stdin, undefined, { name: 'down' });
+  assert.match(frameText(dash.stdout), /> layout\s+preset \(3 rows \+ wrap\)/);
+  press(dash.stdin, undefined, { name: 'right' });
+  assert.match(frameText(dash.stdout), /> layout\s+custom \(3 rows \+ wrap\)/);
+  press(dash.stdin, undefined, { name: 'right' });
+  assert.match(frameText(dash.stdout), /> layout\s+auto wrap \(1 row\)/);
+  press(dash.stdin, '\r', { name: 'return' });
+  assert.equal((await dashResult).saved, true);
+  assert.equal(dashSaved.layout, 'flat');
+});
+
+test('the layout panel breaks, merges, aligns, resets, and edits per-segment in custom multi-row mode', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 36;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'studio', segments: ['model', 'dir', 'git', 'context', 'cost'] }),
+    stdin, stdout,
+    onSave: async (preferences) => { saved = preferences; },
+  });
+
+  // Open layout (index 8)
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  assert.match(frameText(stdout), /── Row 1 \(auto wrap\) ──/);
+  assert.match(frameText(stdout), /── Disabled ──/);
+
+  // Move to Context (index 3) and press 'b' to split into Row 2
+  for (let step = 0; step < 3; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, 'b', { name: 'b' });
+  assert.match(frameText(stdout), /── Row 1 ──/);
+  assert.match(frameText(stdout), /── Row 2 ──/);
+  assert.match(frameText(stdout), /> Context\s+enabled\s+row 2 left/);
+
+  // Move to Cost (index 4) and press 'a' to move it to Row 2 right
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, 'a', { name: 'a' });
+  assert.match(frameText(stdout), /> Cost\s+enabled\s+row 2 right/);
+
+  // Press 'e' on Cost to verify single-block preview works cleanly under custom multi-row layout
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /Edit segment: Cost/);
+  press(stdin, undefined, { name: 'escape' });
+  assert.match(frameText(stdout), /Segment layout/);
+
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.deepEqual(saved.layout, [[3, 0], [1, 1]]);
+  assert.deepEqual(saved.segments, ['model', 'dir', 'git', 'context', 'cost']);
+
+  // Merge back with 'b' on row-2 start and reset with 'r'
+  const second = terminal();
+  second.stdout.columns = 120;
+  second.stdout.rows = 36;
+  const secondFrames = [];
+  second.stdout.write = (frame) => { secondFrames.push(String(frame)); second.stdout.frames = secondFrames; return true; };
+  let secondSaved;
+  const secondResult = runEditor({
+    preferences: normalizePreferences({ preset: 'studio', segments: ['model', 'dir', 'git', 'context', 'cost'], layout: [[3, 0], [2, 0]] }),
+    stdin: second.stdin, stdout: second.stdout,
+    onSave: async (preferences) => { secondSaved = preferences; },
+  });
+  for (let step = 0; step < 8; step += 1) press(second.stdin, undefined, { name: 'down' });
+  press(second.stdin, '\r', { name: 'return' });
+  for (let step = 0; step < 3; step += 1) press(second.stdin, undefined, { name: 'down' });
+  // Merge row 2 back into row 1
+  press(second.stdin, 'b', { name: 'b' });
+  assert.match(frameText(second.stdout), /── Row 1 \(auto wrap\) ──/);
+  assert.doesNotMatch(frameText(second.stdout), /── Row 2 ──/);
+  // Break again, then reset with 'r'
+  press(second.stdin, 'b', { name: 'b' });
+  assert.match(frameText(second.stdout), /── Row 2 ──/);
+  press(second.stdin, 'r', { name: 'r' });
+  assert.match(frameText(second.stdout), /── Row 1 \(auto wrap\) ──/);
+  assert.doesNotMatch(frameText(second.stdout), /── Row 2 ──/);
+  press(second.stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await secondResult).saved, true);
+  assert.equal(secondSaved.layout, 'flat');
+});
+
+test('the layout panel shows tree bottom tag for subagents in tree mode and hides it in inline mode', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['model', 'subagents'] }),
+    stdin, stdout,
+    onSave: async () => {},
+  });
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  assert.match(frameText(stdout), /Subagents\s+enabled\s+row 1 left · tree \(bottom\)/);
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, 'e', { name: 'e' });
+  press(stdin, undefined, { name: 'right' }); // tree -> inline
+  press(stdin, undefined, { name: 'escape' });
+  assert.match(frameText(stdout), /Subagents\s+enabled\s+row 1 left · custom/);
+  assert.doesNotMatch(frameText(stdout), /tree \(bottom\)/);
+  press(stdin, 'q', { name: 'q' });
+  assert.equal((await result).saved, false);
+});

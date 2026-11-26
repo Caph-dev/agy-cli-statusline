@@ -2,7 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { colorDepth, paint, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
 import { CCLINE_PALETTES, CCLINE_PRESETS } from '../lib/ccline-data.mjs';
-import { ITEM_FORMAT_PRESETS, normalizePreferences, presetRows } from '../lib/preferences.mjs';
+import {
+  ITEM_FORMAT_PRESETS,
+  layoutModeOf,
+  normalizePreferences,
+  parseLayoutFlag,
+  parseSegmentsAndLayout,
+  presetHasStructuredLayout,
+  presetRows,
+  seedCustomLayout,
+} from '../lib/preferences.mjs';
 import { gaugeIcon, renderLine } from '../lib/render.mjs';
 import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
 import { collectSegments } from '../lib/segments.mjs';
@@ -627,4 +636,83 @@ test('subagents segment renders agy-zh-pack aligned tree, prunes empty columns, 
 
   const studioTree = stripAnsi(render({ preset: 'studio' }, samplePayload(), 160));
   assert.doesNotMatch(studioTree, /\$\s+\$/);
+});
+
+test('custom multi-row layout works across built-in and upstream presets and validates layout helpers', () => {
+  // Built-in presets support custom multi-row + left/right layouts
+  const studioTwoRow = normalizePreferences({
+    preset: 'studio',
+    segments: ['model', 'dir', 'git', 'context', 'cost', 'state'],
+    layout: [[3, 0], [3, 0]],
+  });
+  assert.deepEqual(studioTwoRow.layout, [[3, 0], [3, 0]]);
+  assert.equal(layoutModeOf(studioTwoRow), 'custom');
+  assert.deepEqual(presetRows(studioTwoRow).map(r => r.left.map(i => i.metric)), [
+    ['model', 'dir', 'git'],
+    ['context', 'cost', 'state'],
+  ]);
+  const studioOut = stripAnsi(render(studioTwoRow, samplePayload(), 160)).split('\n');
+  assert.equal(studioOut.length, 2);
+  assert.match(studioOut[0], /Gemini 2\.5 Pro high.*atlas.*main/);
+  assert.match(studioOut[1], /42%.*\$1\.284.*editing/);
+
+  const signalSplit = normalizePreferences({
+    preset: 'signal',
+    segments: ['model', 'dir', 'git', 'cost', 'context', 'quota', 'state', 'sandbox'],
+    layout: [[3, 1], [4, 0]],
+  });
+  assert.deepEqual(presetRows(signalSplit)[0].right.map(i => i.metric), ['cost']);
+  assert.equal(stripAnsi(render(signalSplit, samplePayload(), 160)).split('\n').length, 2);
+
+  for (const preset of ['compact', 'bracket', 'focus-legacy']) {
+    const prefs = normalizePreferences({ preset, segments: ['model', 'dir', 'git', 'context'], layout: [[2, 0], [2, 0]] });
+    assert.equal(presetRows(prefs).length, 2);
+  }
+
+  // 'auto' normalizes to 'flat', and 'preset' on built-in presets normalizes to 'flat'
+  assert.equal(normalizePreferences({ preset: 'dashboard', layout: 'auto' }).layout, 'flat');
+  assert.equal(normalizePreferences({ preset: 'studio', layout: 'preset' }).layout, 'flat');
+  assert.throws(() => normalizePreferences({ preset: 'studio', segments: ['model', 'dir', 'git', 'context'], layout: [[3, 0], [3, 0]] }), /layout counts/);
+  assert.throws(() => normalizePreferences({ preset: 'studio', layout: 'grid' }), /unknown layout/);
+
+  // Structured preset detection & seedCustomLayout
+  for (const id of ['dashboard', 'budget', 'cache-aware', 'focus', 'powerline']) {
+    assert.equal(presetHasStructuredLayout(id), true, id);
+  }
+  for (const id of ['cometix', 'minimal', 'zen', 'studio', 'signal', 'compact', 'bracket', 'focus-legacy']) {
+    assert.equal(presetHasStructuredLayout(id), false, id);
+  }
+  assert.deepEqual(seedCustomLayout(normalizePreferences({ preset: 'studio', segments: ['model', 'dir', 'git', 'context', 'cost'] })), [[3, 0], [2, 0]]);
+  assert.deepEqual(seedCustomLayout(normalizePreferences({ preset: 'studio', segments: ['model'] })), [[1, 0]]);
+  assert.deepEqual(seedCustomLayout(normalizePreferences({ preset: 'budget' })), [[3, 2], [2, 0]]);
+
+  // parseLayoutFlag
+  assert.equal(parseLayoutFlag('flat'), 'flat');
+  assert.equal(parseLayoutFlag('auto'), 'flat');
+  assert.equal(parseLayoutFlag('preset'), 'preset');
+  assert.deepEqual(parseLayoutFlag('3,2'), [[3, 0], [2, 0]]);
+  assert.deepEqual(parseLayoutFlag('3:1, 2:1'), [[3, 1], [2, 1]]);
+  for (const bad of ['', '0', '0:0', '3,,2', 'grid', '3:-1']) {
+    assert.throws(() => parseLayoutFlag(bad), /unknown layout/);
+  }
+
+  // parseSegmentsAndLayout
+  assert.deepEqual(parseSegmentsAndLayout('model,dir,git'), { segments: ['model', 'dir', 'git'], layout: undefined });
+  assert.deepEqual(parseSegmentsAndLayout('model,dir,git / context,cache,cost'), {
+    segments: ['model', 'dir', 'git', 'context', 'cache', 'cost'],
+    layout: [[3, 0], [3, 0]],
+  });
+  assert.deepEqual(parseSegmentsAndLayout('model,dir | cost / context,cache'), {
+    segments: ['model', 'dir', 'cost', 'context', 'cache'],
+    layout: [[2, 1], [2, 0]],
+  });
+  assert.deepEqual(parseSegmentsAndLayout(' | cost'), { segments: ['cost'], layout: [[0, 1]] });
+  assert.deepEqual(parseSegmentsAndLayout('model,dir / model,cost'), {
+    segments: ['model', 'dir', 'cost'],
+    layout: [[2, 0], [1, 0]],
+  });
+  assert.throws(() => parseSegmentsAndLayout('model / '), /empty row/);
+  assert.throws(() => parseSegmentsAndLayout('model / model'), /empty row/);
+  assert.throws(() => parseSegmentsAndLayout('model | dir | cost'), /at most one '\|'/);
+  assert.throws(() => parseSegmentsAndLayout('model / nope'), /unknown segment/);
 });

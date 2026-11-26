@@ -16,7 +16,8 @@ import { configRoot } from "../lib/paths.mjs";
 import {
   enumNames,
   normalizePreferences,
-  parseSegments,
+  parseLayoutFlag,
+  parseSegmentsAndLayout,
   SEGMENT_IDS,
   PreferenceError,
 } from "../lib/preferences.mjs";
@@ -45,7 +46,8 @@ configure options
   --context-format MODE  ${enumNames("contextFormat").join(" | ")}
   --quota-pace MODE      ${enumNames("quotaPace").join(" | ")}
   --dir-style MODE       ${enumNames("dirStyle").join(" | ")}
-  --segments CSV         ordered ids: ${SEGMENT_IDS.join(",")}
+  --segments CSV         ordered ids (use '/' for rows, '|' for left/right): ${SEGMENT_IDS.join(",")}
+  --layout MODE          flat | preset | L[:R],L[:R]... (e.g. 3,3 or 3:1,2:0)
   --replace              replace a statusLine command this tool does not own
 
 preview options
@@ -96,7 +98,7 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
         `config root: ${root}`,
         current.ownership === "foreign"
           ? "a different statusLine is configured. Re-run with: configure --replace ..."
-          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--context-format MODE] [--quota-pace MODE] [--dir-style MODE] [--segments CSV]",
+          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--context-format MODE] [--quota-pace MODE] [--dir-style MODE] [--segments CSV] [--layout MODE]",
         "read the current state with: configure --show",
         "",
       ].join("\n"),
@@ -167,7 +169,7 @@ function resolveWrite(current, flags) {
   const preset = explicitFlags.preset;
   const base = preset ? { preset } : current.preferences;
   const options = { ...base, ...explicitFlags };
-  if (explicitFlags.segments) delete options.layout;
+  if (explicitFlags.segments && explicitFlags.layout == null) delete options.layout;
   return normalizePreferences(options);
 }
 
@@ -176,12 +178,17 @@ function explicit(flags) {
   for (const key of ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "dirStyle"]) {
     if (flags[key] != null) out[key] = flags[key];
   }
-  if (flags.segments != null) out.segments = parseSegments(flags.segments);
+  if (flags.segments != null) {
+    const parsed = parseSegmentsAndLayout(flags.segments);
+    out.segments = parsed.segments;
+    if (parsed.layout) out.layout = parsed.layout;
+  }
+  if (flags.layout != null) out.layout = parseLayoutFlag(flags.layout);
   return out;
 }
 
 function hasWriteFlags(flags) {
-  return ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "dirStyle", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
+  return ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "quotaPace", "dirStyle", "segments", "layout", "replace"].some((key) => flags[key] != null && flags[key] !== false);
 }
 
 function publicInfo(info) {
@@ -202,6 +209,7 @@ function publicInfo(info) {
       contextFormat: enumNames("contextFormat"),
       quotaPace: enumNames("quotaPace"),
       dirStyle: enumNames("dirStyle"),
+      layout: ["flat", "preset", "L[:R],L[:R]..."],
       segments: SEGMENT_IDS,
     },
   };
@@ -223,7 +231,7 @@ function parseArgs(argv) {
       flags.replace = true;
       continue;
     }
-    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--context-format", "--quota-pace", "--dir-style", "--segments"];
+    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--context-format", "--quota-pace", "--dir-style", "--segments", "--layout"];
     if (!known.includes(token)) throw new UsageError(`unknown option '${token}'`);
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) throw new UsageError(`${token} needs a value`);

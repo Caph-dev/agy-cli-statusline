@@ -20,7 +20,7 @@ A customizable status line and live-preview terminal editor for Antigravity CLI 
 
 - **Live-preview TUI editor**: bilingual (English / 简体中文), keyboard-driven, powered by the exact same renderer `agy` uses.
 - **Rich telemetry**: 18 built-in segments covering model, context ring/bar, prompt cache, Git diff stats, 5h/7d quota pace, TPS, session & daily spend, and an aligned subagent tree.
-- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in), 18 color palettes, Nerd / Unicode / ASCII icons, and full-fidelity narrow-terminal wrapping.
+- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in), 18 color palettes, Nerd / Unicode / ASCII icons, and hybrid multi-row layouts with full-fidelity per-row narrow-terminal wrapping.
 - **Safe & standalone**: zero runtime dependencies; registers into `~/.gemini/antigravity-cli/settings.json` with automatic backup if replacing an existing status line.
 
 ## Quick Start
@@ -52,10 +52,12 @@ In `agy`, type `/agy-cli-statusline-setup`, press `Tab` to complete to `/agy-cli
 ```sh
 agy-cli-statusline configure --show
 agy-cli-statusline configure --preset dashboard --color-depth 256
+agy-cli-statusline configure --preset studio --segments "model,dir,git / context,cache,cost"
+agy-cli-statusline configure --preset studio --layout 3,2 --segments "model,dir,git,context,cost"
 agy-cli-statusline preview --preset cometix
 ```
 
-Run `agy-cli-statusline --help` for all options, and add `--replace` when replacing an existing custom status line.
+Use `/` inside `--segments` for forced line breaks (and optional `|` for left/right alignment within a row), or pass `--layout flat | preset | L[:R],L[:R]...`. Run `agy-cli-statusline --help` for all options, and add `--replace` when replacing an existing custom status line.
 
 > Preferences and a self-contained renderer copy live in `~/.gemini/antigravity-cli/agy-cli-statusline/`, so the footer keeps working even if npm's cache is cleared or the plugin is uninstalled. Switch `icons` to `unicode` or `ascii` if your terminal does not use a Nerd Font.
 
@@ -89,13 +91,15 @@ Run `agy-cli-statusline --help` for all options, and add `--replace` when replac
 
 - **Presets**: CCometixLine (`cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, `powerline`) and built-in (`studio`, `signal`, `compact`, `bracket`, `focus-legacy`).
 - **Themes & appearance**: 13 CCometixLine palettes + 5 built-in themes (`dusk`, `ink`, `paper`, `signal`, `mono`); skins (`powerline`, `plain`, `compact`, `bracket`, `pill`); color depth (`auto`, `truecolor`, `256`, `16`, `none`).
+- **Multi-row + auto-wrap layouts**: switch `layout` between single-row auto-wrap, preset multi-row, and custom multi-row (any preset can define forced line breaks and left/right alignment, while each logical row still wraps independently on narrow terminals).
 - **Per-segment editing**: customize each enabled segment's widget, Nerd Font icon preset or custom glyph, and `{field}` / `[...]` format template directly in the layout editor.
 
 | Key | Action |
 | :--- | :--- |
 | `↑` / `↓` (`j` / `k`) | Move between fields or segments |
-| `←` / `→` (`h` / `l`) | Cycle option values |
+| `←` / `→` (`h` / `l`) | Cycle option values (including `layout` mode) |
 | `Enter` / `Space` | Open **segments** layout; inside layout, `Space` toggles a segment and `Enter` picks up / drops to reorder (`Esc` cancels move) |
+| `b` / `a` / `r` | Inside layout: `b` breaks/merges row before segment, `a` flips left/right alignment, `r` resets layout |
 | `e` or `→` | Edit an enabled segment's widget, icon, and format template (`r` resets to default) |
 | `Ctrl+S` / `q` | Save / cancel |
 

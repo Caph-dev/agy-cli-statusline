@@ -100,3 +100,56 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
     }
   }
 });
+
+test('hybrid manual multi-row layout preserves row breaks while wrapping each overflowing row independently', () => {
+  const twoRowStudio = {
+    preset: 'studio',
+    skin: 'plain',
+    icons: 'none',
+    segments: ['model', 'dir', 'git', 'context', 'cache', 'cost'],
+    layout: [[3, 0], [3, 0]],
+  };
+
+  // Wide terminal strictly keeps 2 manual rows
+  const wideLines = renderAt(twoRowStudio, 120).split('\n');
+  assert.equal(wideLines.length, 2);
+  assert.match(wideLines[0], /^Gemini 2\.5 Pro high · ~\/…\/atlas · main \* \+1 2f08999$/);
+  assert.match(wideLines[1], /^◑ 42% · 3:42 · 94% hit · \$1\.284$/);
+
+  // Narrow terminal (width 36) wraps Row 1 onto 2 lines AND starts Row 2 cleanly on its own new line
+  const narrowLines = renderAt(twoRowStudio, 36).split('\n');
+  assert.ok(narrowLines.length >= 3, narrowLines.join('\n'));
+  for (const line of narrowLines) assert.ok(visibleWidth(line) <= 36, line);
+  assert.equal(narrowLines[0], 'Gemini 2.5 Pro high · ~/…/atlas');
+  assert.equal(narrowLines[1], 'main * +1 2f08999');
+  assert.match(narrowLines[2], /^◑ 42%/);
+
+  // Empty logical row collapses without producing blank lines
+  const collapsed = renderAt(
+    { preset: 'studio', skin: 'plain', icons: 'none', segments: ['model', 'dir', 'quota.5h', 'cost'], layout: [[2, 0], [2, 0]] },
+    100,
+    { payload: { model: { display_name: 'Gemini' }, workspace: { current_dir: '/Users/ada/src/atlas' } }, git: null },
+  );
+  assert.equal(collapsed, 'Gemini · ~/…/atlas');
+
+  // Custom left/right row on built-in preset right-aligns on wide terminal and wraps cleanly on narrow terminal
+  const splitPrefs = {
+    preset: 'studio',
+    skin: 'plain',
+    icons: 'none',
+    segments: ['model', 'dir', 'cost', 'context', 'cache'],
+    layout: [[2, 1], [2, 0]],
+  };
+  const splitWide = renderAt(splitPrefs, 100).split('\n');
+  assert.equal(splitWide.length, 2);
+  assert.equal(visibleWidth(splitWide[0]), 100);
+  assert.match(splitWide[0], /^Gemini 2\.5 Pro high · ~\/…\/atlas\s+\$1\.284$/);
+  assert.match(splitWide[1], /^◑ 42% · 3:42 · 94% hit$/);
+
+  const splitNarrow = renderAt(splitPrefs, 30).split('\n');
+  for (const line of splitNarrow) assert.ok(visibleWidth(line) <= 30, line);
+  const costLineIndex = splitNarrow.findIndex(line => line.includes('$1.284'));
+  const ctxLineIndex = splitNarrow.findIndex(line => line.includes('42%'));
+  assert.ok(costLineIndex >= 0 && ctxLineIndex > costLineIndex);
+  assert.match(splitNarrow[costLineIndex], /^\s+\$1\.284$/);
+});
