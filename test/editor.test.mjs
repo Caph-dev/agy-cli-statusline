@@ -357,3 +357,40 @@ test('the layout editor supports Chinese single-block labels and r reset', async
   assert.equal((await result).saved, true);
   assert.equal(saved.items, undefined);
 });
+
+test('the editor preview wraps full styles on narrow terminals and resolves sample home paths to ~', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 70;
+  stdout.rows = 24;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  const result = runEditor({
+    preferences: normalizePreferences({
+      preset: 'cometix',
+      layout: 'flat',
+      segments: ['model', 'context', 'cache', 'dir', 'git', 'worktree', 'quota.5h', 'quota.7d', 'cost'],
+    }),
+    stdin, stdout, language: 'zh',
+    onSave: async () => {},
+  });
+  const initial = frameText(stdout);
+  assert.match(initial, /\uef23 Gemini 2\.5 Pro high/);
+  assert.match(initial, /\uf49b 42% · 84k tokens/);
+  assert.doesNotMatch(initial, /▰|▱/);
+  assert.match(initial, /\u{f024b} ~\/…\/atlas/u);
+  assert.match(initial, /\uf1c0 cache 42k read · 1\.2k created/);
+  assert.match(initial, /\u{f0520} ▀▀▀▀▀▀▀▀ 7d 82% ⇡27% · 3d3h/u);
+
+  // Move to dirStyle (index 7) and switch to tilde (~) and short (~/s/atlas)
+  for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, undefined, { name: 'right' }); // name
+  press(stdin, undefined, { name: 'right' }); // parent
+  press(stdin, undefined, { name: 'right' }); // tilde
+  assert.match(frameText(stdout), /~\/src\/atlas/);
+  press(stdin, undefined, { name: 'right' }); // short
+  assert.match(frameText(stdout), /~\/s\/atlas/);
+
+  press(stdin, 'q', { name: 'q' });
+  assert.equal((await result).saved, false);
+  assert.equal(stdin.isRaw, false);
+});

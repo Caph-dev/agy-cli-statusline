@@ -63,7 +63,11 @@ test('registration preserves agy settings and the installed renderer accepts agy
   assert.doesNotMatch(untrusted.trimEnd(), /[\r\n\x1b\x9b]/);
 
   const narrow = succeeded(f.render({ ...payload, terminal_width: 18 }));
-  assert.ok(narrow.trimEnd().length <= 18, narrow);
+  const narrowLines = narrow.trimEnd().split('\n');
+  assert.ok(narrowLines.length >= 2, narrow);
+  for (const line of narrowLines) assert.ok(line.length <= 18, line);
+  assert.match(narrow, /Fixture Model/);
+  assert.match(narrow, /0%/);
   assert.doesNotMatch(succeeded(f.render({ model: null, context_window: null })), /undefined|NaN|null/);
 
   const original = readFileSync(f.settingsPath, 'utf8');

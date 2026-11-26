@@ -90,6 +90,15 @@ test('preset layout keeps row slots while a legacy custom order stays flat', () 
   const legacy = normalizePreferences({ preset: 'dashboard', segments: ['worktree', 'model'] });
   assert.equal(legacy.layout, undefined);
   assert.equal(presetRows(legacy).length, 1);
+  const flatCometix = normalizePreferences({
+    preset: 'cometix',
+    layout: 'flat',
+    segments: ['model', 'context', 'dir'],
+  });
+  assert.equal(presetRows(flatCometix).length, 1);
+  assert.equal(presetRows(flatCometix)[0].left[1].widget, 'text');
+  assert.equal(presetRows(flatCometix)[0].left[1].format, '{pct}%[ · {tokens} tokens]');
+  assert.equal(presetRows(flatCometix)[0].left[2].icon_color, 'bright_yellow');
   assert.throws(() => normalizePreferences({ preset: 'dashboard', layout: 'grid' }), /unknown layout/);
 });
 

@@ -20,7 +20,7 @@ import {
   SEGMENT_IDS,
   PreferenceError,
 } from "../lib/preferences.mjs";
-import { SAMPLE_GIT, samplePayload } from "../lib/sample.mjs";
+import { SAMPLE_GIT, SAMPLE_HOME, samplePayload } from "../lib/sample.mjs";
 import { inspectInstall, install, SettingsConflict, SettingsError } from "../lib/settings.mjs";
 import { renderPayload } from "../lib/statusline.mjs";
 
@@ -154,6 +154,7 @@ async function runPreview({ flags, stdout }) {
   const line = await renderPayload(payload, preferences, {
     width: payload.terminal_width,
     gitLookup: async () => SAMPLE_GIT,
+    home: SAMPLE_HOME,
   });
   stdout.write(`${line}\n`);
   return 0;
