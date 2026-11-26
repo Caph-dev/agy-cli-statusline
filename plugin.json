@@ -1,0 +1,7 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "agy-cli-statusline",
+  "displayName": "Status Line Studio",
+  "version": "0.1.0",
+  "description": "Design a custom status line for Antigravity CLI. Choose a preset and customize the palette, layout, and metrics from the setup skill."
+}

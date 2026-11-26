@@ -1,0 +1,18 @@
+{
+  "name": "agy-cli-statusline",
+  "version": "0.1.0",
+  "description": "A customizable status line and live-preview terminal editor for Antigravity CLI.",
+  "bin": {
+    "agy-cli-statusline": "bin/agy-cli-statusline.mjs"
+  },
+  "files": ["bin/", "lib/", "plugin.json", "skills/"],
+  "engines": {
+    "node": ">=22"
+  },
+  "os": ["darwin", "linux"],
+  "scripts": {
+    "test": "node --test",
+    "validate:plugin": "agy plugin validate --strict ."
+  },
+  "keywords": ["antigravity", "agy", "statusline", "terminal"]
+}

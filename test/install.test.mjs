@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+const cli = fileURLToPath(new URL('../bin/agy-cli-statusline.mjs', import.meta.url));
+
+function fixture(t, settings) {
+  const directory = mkdtempSync(join(tmpdir(), "agy status's test-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const settingsPath = join(directory, 'settings.json');
+  if (settings !== undefined) writeFileSync(settingsPath, JSON.stringify(settings));
+  const env = { ...process.env, AGY_CLI_STATUSLINE_HOME: directory, NO_COLOR: '1' };
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], {
+    env, encoding: 'utf8', timeout: 5000,
+  });
+  const read = () => JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const render = payload => spawnSync('sh', ['-c', read().statusLine.command], {
+    env, input: JSON.stringify(payload), encoding: 'utf8', timeout: 5000,
+  });
+  return { directory, settingsPath, run, read, render };
+}
+
+function succeeded(result) {
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout;
+}
+
+test('the npm-style bin symlink invokes the CLI', t => {
+  const f = fixture(t);
+  const link = join(f.directory, 'agy-cli-statusline');
+  symlinkSync(cli, link);
+  const result = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8', timeout: 5000 });
+  assert.match(succeeded(result), /agy-cli-statusline configure/);
+});
+
+test('registration preserves agy settings and the installed renderer accepts agy JSON', t => {
+  const f = fixture(t, { colorScheme: 'terminal', autoUpdate: false });
+  succeeded(f.run('configure', '--icons', 'ascii', '--segments', 'model,context'));
+  const first = f.read();
+  assert.equal(first.colorScheme, 'terminal');
+  assert.equal(first.autoUpdate, false);
+  assert.equal(first.statusLine.type, 'command');
+
+  const payload = {
+    model: { display_name: 'Fixture Model' },
+    context_window: { used_percentage: 0, current_usage: { input_tokens: 0 }, context_window_size: 1_000_000 },
+    terminal_width: 80,
+  };
+  const visible = succeeded(f.render(payload));
+  assert.match(visible, /Fixture Model/);
+  assert.match(visible, /0%/);
+  assert.doesNotMatch(visible, /\x1b/);
+  const untrusted = succeeded(f.render({
+    ...payload,
+    model: { display_name: 'First\nSecond\x1b[2J\x9b' },
+  }));
+  assert.match(untrusted, /First Second/);
+  assert.doesNotMatch(untrusted.trimEnd(), /[\r\n\x1b\x9b]/);
+
+  const narrow = succeeded(f.render({ ...payload, terminal_width: 18 }));
+  assert.ok(narrow.trimEnd().length <= 18, narrow);
+  assert.doesNotMatch(succeeded(f.render({ model: null, context_window: null })), /undefined|NaN|null/);
+
+  const original = readFileSync(f.settingsPath, 'utf8');
+  succeeded(f.run('configure', '--icons', 'ascii', '--segments', 'model,context'));
+  assert.equal(readFileSync(f.settingsPath, 'utf8'), original);
+});
+
+test('read-only and failed commands leave existing settings untouched', t => {
+  const f = fixture(t);
+  assert.doesNotThrow(() => JSON.parse(succeeded(f.run('configure', '--show'))));
+  assert.equal(existsSync(f.settingsPath), false);
+  const malformed = '{"statusLine":';
+  writeFileSync(f.settingsPath, malformed);
+  assert.notEqual(f.run('configure').status, 0);
+  assert.equal(readFileSync(f.settingsPath, 'utf8'), malformed);
+});
+
+test('an explicit replacement backs up another status line', t => {
+  const previous = {
+    statusLine: { type: 'command', command: 'node /other/agy-cli-statusline/custom.mjs' },
+    unrelated: true,
+  };
+  const f = fixture(t, previous);
+  assert.notEqual(f.run('configure').status, 0);
+  assert.deepEqual(f.read(), previous);
+  assert.deepEqual(readdirSync(f.directory), ['settings.json']);
+
+  succeeded(f.run('configure', '--replace'));
+  assert.notEqual(f.read().statusLine.command, previous.statusLine.command);
+  assert.equal(f.read().unrelated, true);
+  const backup = readdirSync(f.directory).find(name => name.startsWith('settings.json.'));
+  assert.ok(backup, 'original settings backup should exist');
+  assert.deepEqual(JSON.parse(readFileSync(join(f.directory, backup), 'utf8')), previous);
+});
