@@ -41,6 +41,16 @@ agy plugin install https://github.com/Caph-dev/agy-cli-statusline
 
 选择一个预设，或描述想要的样式和分段。Skill 会调用插件自带的安装器保存配置。如果当前会话的状态栏没有更新，请重启 agy。
 
+## 估算 agy 的生成速度
+
+在仓库根目录，通过 Herdr Core 启动一次测量。
+
+```sh
+herdr-core run -- node bin/agy-cli-statusline.mjs tps "用 200 字解释哈希表的工作原理。"
+```
+
+需要指定模型时，在提示词前加 `--model ID`。命令会将响应实时输出到 stdout，并将测量结果写入 stderr。平均 TPS 用 agy 报告的输出 token 数除以各响应步骤从首段到末段的时间之和。agy 按响应步骤提供 token 数，计算结果受分块影响。只收到一段时无法测得生成区间。命令还会单独显示首次可见文本的等待时间，其中包含 agy 启动时间。
+
 ## 在脚本中配置
 
 运行 `agy-cli-statusline --help` 查看预设和可用选项。

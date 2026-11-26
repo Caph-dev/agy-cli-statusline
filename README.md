@@ -41,6 +41,16 @@ Start `agy`. Type `/agy-cli-statusline-setup` and press Tab to accept the comple
 
 Choose a preset or describe the style and segments you want. The skill runs the bundled installer with those choices. Restart agy if the status line does not update in the current session.
 
+## Estimate agy generation speed
+
+From the checkout, run the measurement in a Herdr Core terminal.
+
+```sh
+herdr-core run -- node bin/agy-cli-statusline.mjs tps "Explain how a hash table works in 200 words."
+```
+
+Add `--model ID` before the prompt to use a specific agy model. The command streams the answer to stdout and prints the estimate to stderr. It divides the reported output tokens by the time between the first and last visible chunks in each measured response step. agy reports tokens per step rather than per chunk. A response with a single chunk has no measurable interval. The command also reports time to first visible text, including agy startup.
+
 ## Use the command in scripts
 
 Run `agy-cli-statusline --help` for supported presets and options. `configure --show` prints the current preferences and installation status. `configure` saves the supplied options and registers the footer. Use `--replace` to replace an existing custom status line. `preview` prints a sample footer.

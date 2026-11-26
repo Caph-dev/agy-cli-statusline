@@ -33,6 +33,7 @@ Usage
   agy-cli-statusline
   agy-cli-statusline configure [options]
   agy-cli-statusline preview [options]
+  agy-cli-statusline tps [--model ID] <prompt>
   agy-cli-statusline --help
 
 configure options
@@ -50,6 +51,12 @@ configure options
 preview options
   the same style and layout options as configure; no files are written
 
+tps options
+  --model ID             select an agy model
+  --                     treat subsequent arguments as prompt text
+  Runs agy in print mode. Streams its answer and reports estimated generation
+  tokens per second and the delay to first visible text on stderr.
+
 On a TTY, choose a language before opening the editor. First-time setup
 registers the status line; existing preferences are preserved. A statusLine owned by something else is not replaced without --replace
 or an explicit confirmation. AGY_CLI_STATUSLINE_HOME overrides the config root
@@ -63,6 +70,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const root = io.root ?? configRoot();
   try {
     const command = argv[0] && !argv[0].startsWith("-") ? argv[0] : "";
+    if (command === "tps") return await measureTps(argv.slice(1), { stdout, stderr });
     const flags = parseArgs(command ? argv.slice(1) : argv);
     if (flags.help || argv.includes("--help") || argv.includes("-h")) {
       stdout.write(HELP);
@@ -80,6 +88,25 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     }
     throw error;
   }
+}
+
+async function measureTps(args, { stdout, stderr }) {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
+    stdout.write(HELP);
+    return 0;
+  }
+  let model;
+  if (args[0] === "--model") {
+    model = args[1];
+    if (!model?.trim() || model.startsWith("-")) throw new UsageError("--model needs an agy model ID");
+    args = args.slice(2);
+  }
+  if (args[0] === "--") args = args.slice(1);
+  else if (args[0]?.startsWith("-")) throw new UsageError(`unknown tps option '${args[0]}'; use -- before a prompt starting with a dash`);
+  const prompt = args.join(" ");
+  if (!prompt.trim()) throw new UsageError("usage: agy-cli-statusline tps [--model ID] <prompt>");
+  const { runTps } = await import("../lib/tps.mjs");
+  return runTps({ prompt, model, stdout, stderr });
 }
 
 async function runDefault({ flags, root, stdin, stdout, stderr }) {
