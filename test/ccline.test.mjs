@@ -144,3 +144,41 @@ test('context format supports percent, used tokens, and used/total ratio with fa
 
   assert.throws(() => normalizePreferences({ contextFormat: 'invalid' }), /unknown context format/);
 });
+
+test('quota pace option toggles 5h and 7d pace deltas across presets', () => {
+  const payload = {
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 0.70, reset_in_seconds: 13_500 },
+      { id: 'gemini-weekly', label: 'weekly', remaining_fraction: 0.80, reset_in_seconds: 163_296 },
+    ],
+  };
+  const budgetAuto = render({ preset: 'budget', colorDepth: '256' }, payload);
+  assert.match(stripAnsi(budgetAuto), /5h 30% ⇡5%/);
+  assert.match(stripAnsi(budgetAuto), /7d 20% ⇣53%/);
+  assert.match(budgetAuto, /▀/);
+
+  const budgetHidden = render({ preset: 'budget', colorDepth: '256', quotaPace: 'hide' }, payload);
+  assert.match(stripAnsi(budgetHidden), /5h 30%/);
+  assert.match(stripAnsi(budgetHidden), /7d 20%/);
+  assert.doesNotMatch(stripAnsi(budgetHidden), /[⇡⇣±]/);
+  assert.match(budgetHidden, /▀/);
+
+  const powerlineAuto = stripAnsi(render({ preset: 'powerline' }, payload));
+  assert.match(powerlineAuto, /5h 30%/);
+  assert.doesNotMatch(powerlineAuto, /⇡5%/);
+
+  const powerlineShow = stripAnsi(render({ preset: 'powerline', quotaPace: 'show' }, payload));
+  assert.match(powerlineShow, /5h 30% ⇡5%/);
+
+  const asciiHidden = stripAnsi(render({ preset: 'budget', icons: 'ascii', quotaPace: 'hide' }, payload));
+  assert.match(asciiHidden, /5h 30%/);
+  assert.match(asciiHidden, /7d 20%/);
+  assert.doesNotMatch(asciiHidden, /[+-]\d+%/);
+
+  const noReset = { quota: [{ id: 'gemini-5h', label: '5h', remaining_fraction: 0.70 }] };
+  const shownNoReset = stripAnsi(render({ preset: 'budget', quotaPace: 'show' }, noReset));
+  assert.match(shownNoReset, /5h 30%/);
+  assert.doesNotMatch(shownNoReset, /[⇡⇣±]/);
+
+  assert.throws(() => normalizePreferences({ quotaPace: 'invalid' }), /unknown quota pace/);
+});

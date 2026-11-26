@@ -16,7 +16,7 @@ npx agy-cli-statusline
 
 From a checkout, run `node bin/agy-cli-statusline.mjs`.
 
-Choose **English** or **简体中文**, then press **Enter**. Use the editor to select a preset, change the style, color depth, or context display format (`auto`, `percent`, `% · used`, or `% · used/total`, e.g. `68% · 340k/500k`), and save. On first launch, the command also registers the footer. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
+Choose **English** or **简体中文**, then press **Enter**. Use the editor to select a preset, change the style, color depth, context display format (`auto`, `percent`, `% · used`, or `% · used/total`, e.g. `68% · 340k/500k`), or whether 5h/7d quota segments show pace deltas (`⇡` / `⇣`), and save. On first launch, the command also registers the footer. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
 
 ## Reorder segments
 

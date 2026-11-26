@@ -117,3 +117,22 @@ test('configure --context-format persists ratio formatting to the installed rend
   }));
   assert.match(output, /68% · 340k\/500k/);
 });
+
+test('configure --quota-pace persists pace delta visibility to the installed renderer', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'budget', '--quota-pace', 'hide'));
+  const shown = JSON.parse(succeeded(f.run('configure', '--show')));
+  assert.equal(shown.preferences.quotaPace, 'hide');
+  assert.deepEqual(shown.enums.quotaPace, ['auto', 'show', 'hide']);
+
+  const output = succeeded(f.render({
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 0.70, reset_in_seconds: 13_500 },
+      { id: 'gemini-weekly', label: 'weekly', remaining_fraction: 0.80, reset_in_seconds: 163_296 },
+    ],
+    terminal_width: 100,
+  }));
+  assert.match(output, /5h 30%/);
+  assert.match(output, /7d 20%/);
+  assert.doesNotMatch(output, /[⇡⇣±]/);
+});

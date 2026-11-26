@@ -96,7 +96,7 @@ test('the layout panel grabs, moves, and restores one segment without wrapping',
     stdin, stdout,
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
+  for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
   press(stdin, '\r', { name: 'return' });
   assert.match(frameText(stdout), /Segment layout/);
   assert.match(frameText(stdout), /Cost\s+enabled\s+row 1 right/);
@@ -153,5 +153,57 @@ test('the editor configures the context format and updates the live preview', as
     assert.equal((await result).saved, true);
     assert.equal(saved.contextFormat, 'ratio');
     assert.equal(stdin.isRaw, false);
+  }
+});
+
+test('the editor toggles 5h and 7d quota pace estimates in the live preview', async () => {
+  for (const [language, label, hideLabel, showLabel] of [
+    ['en', 'quota pace', 'hide', 'show (⇡/⇣)'],
+    ['zh', '配额估算', '隐藏', '显示 (⇡/⇣)'],
+  ]) {
+    const { stdin, stdout } = terminal();
+    stdout.columns = 120;
+    stdout.rows = 30;
+    const frames = [];
+    stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+    let saved;
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'budget' }),
+      stdin, stdout, language,
+      onSave: async (preferences) => { saved = preferences; },
+    });
+    assert.match(frameText(stdout), /5h 38% ⇡19%/);
+    assert.match(frameText(stdout), /7d 82% ⇡27%/);
+    for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
+    press(stdin, undefined, { name: 'left' });
+    assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${hideLabel}`));
+    assert.match(frameText(stdout), /5h 38%/);
+    assert.match(frameText(stdout), /7d 82%/);
+    assert.doesNotMatch(frameText(stdout), /⇡19%|⇡27%/);
+    press(stdin, '\r', { name: 'return' });
+    assert.equal((await result).saved, true);
+    assert.equal(saved.quotaPace, 'hide');
+    assert.equal(stdin.isRaw, false);
+
+    const pwr = terminal();
+    pwr.stdout.columns = 120;
+    pwr.stdout.rows = 30;
+    const pwrFrames = [];
+    pwr.stdout.write = (frame) => { pwrFrames.push(String(frame)); pwr.stdout.frames = pwrFrames; return true; };
+    let pwrSaved;
+    const pwrResult = runEditor({
+      preferences: normalizePreferences({ preset: 'powerline' }),
+      stdin: pwr.stdin, stdout: pwr.stdout, language,
+      onSave: async (preferences) => { pwrSaved = preferences; },
+    });
+    assert.doesNotMatch(frameText(pwr.stdout), /⇡19%/);
+    for (let step = 0; step < 6; step += 1) press(pwr.stdin, undefined, { name: 'down' });
+    press(pwr.stdin, undefined, { name: 'right' });
+    assert.match(frameText(pwr.stdout), new RegExp(`> ${label}\\s+${showLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    assert.match(frameText(pwr.stdout), /5h 38% ⇡19%/);
+    press(pwr.stdin, '\r', { name: 'return' });
+    assert.equal((await pwrResult).saved, true);
+    assert.equal(pwrSaved.quotaPace, 'show');
+    assert.equal(pwr.stdin.isRaw, false);
   }
 });
