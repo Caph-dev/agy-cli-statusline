@@ -568,3 +568,46 @@ test('the editor wraps git available fields cleanly, previews diff stats across 
   assert.equal((await result).saved, true);
   assert.equal(saved.items.git.format, '{branch}[ {dirty}][ {ahead}][ {behind}][ {sha}][ · {files}f[ {added}][ {deleted}]]');
 });
+
+test('the block editor cycles cache format presets to hit-only styles and saves', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['cache'] }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+
+  // Open layout -> edit cache
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /编辑区块：缓存/);
+  assert.match(frameText(stdout), /> 组件\s+默认 \(text\)/);
+
+  // Move down twice: widget -> icon -> format
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, undefined, { name: 'down' });
+  assert.match(frameText(stdout), /> 模板\s+默认/);
+
+  // Cycle format: [{left}][{cold}][ · {hit}%] -> {hit}% hit -> {hit}%
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /\uf1c0 3:42 · 94%/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 模板\s+\{hit\}% hit/);
+  assert.match(frameText(stdout), /\uf1c0 94% hit/);
+  assert.doesNotMatch(frameText(stdout), /3:42/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 模板\s+\{hit\}%/);
+  assert.match(frameText(stdout), /\uf1c0 94%(?! hit)/);
+  assert.doesNotMatch(frameText(stdout), /3:42/);
+  assert.doesNotMatch(frameText(stdout), /94% hit/);
+
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.items.cache.format, '{hit}%');
+});

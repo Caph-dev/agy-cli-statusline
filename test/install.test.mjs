@@ -313,3 +313,31 @@ test('installed renderer computes live git diff stats from the workspace reposit
   }));
   assert.match(output, /^main \/ 2f \+4 -1\n?$/);
 });
+
+test('installed renderer applies persisted cache hit-only format overrides from statusline.json', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'none', '--segments', 'cache'));
+  const prefsPath = join(f.directory, 'agy-cli-statusline', 'statusline.json');
+  const payload = {
+    prompt_cache: {
+      warm: true,
+      caching_observed: true,
+      ttl: '5m',
+      expires_in_seconds: 210,
+      requests: 10,
+      hit_ratio: 0.81,
+    },
+    terminal_width: 120,
+  };
+
+  for (const [format, expected] of [
+    ['{hit}% hit', '81% hit'],
+    ['{hit}%', '81%'],
+  ]) {
+    const prefs = JSON.parse(readFileSync(prefsPath, 'utf8'));
+    prefs.items = { cache: { format } };
+    writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+    const output = succeeded(f.render(payload)).trim();
+    assert.equal(output, expected);
+  }
+});

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { colorDepth, paint, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
 import { CCLINE_PALETTES, CCLINE_PRESETS } from '../lib/ccline-data.mjs';
-import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
+import { ITEM_FORMAT_PRESETS, normalizePreferences, presetRows } from '../lib/preferences.mjs';
 import { gaugeIcon, renderLine } from '../lib/render.mjs';
 import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
 import { collectSegments } from '../lib/segments.mjs';
@@ -360,6 +360,113 @@ test('cache segment aligns with CCometixLine warm/cold countdown, hit ratio, mis
   assert.equal(totalSlots, awarePrefs.segments.length);
   const asciiAware = renderCache({ preset: 'cache-aware', icons: 'ascii' }, warmPayload).text;
   assert.match(asciiAware, /^[\x20-\x7e\n]+$/);
+});
+
+test('cache hit-only format presets render hit percentage cleanly across warm/cold states, widgets, and first-turn hits', () => {
+  assert.equal(ITEM_FORMAT_PRESETS.cache[0], '[{left}][{cold}][ · {hit}% hit]');
+  assert.ok(ITEM_FORMAT_PRESETS.cache.includes('{hit}% hit'));
+  assert.ok(ITEM_FORMAT_PRESETS.cache.includes('{hit}%'));
+
+  const baseNow = 1_790_812_800_000;
+  const warmPayload = {
+    prompt_cache: {
+      warm: true,
+      caching_observed: true,
+      ttl: '5m',
+      expires_at: 1_790_813_022,
+      requests: 12,
+      misses: 1,
+      hit_ratio: 0.81,
+    },
+  };
+  const coldPayload = {
+    prompt_cache: {
+      warm: false,
+      caching_observed: true,
+      ttl: '5m',
+      expires_at: null,
+      requests: 12,
+      misses: 2,
+      hit_ratio: 0.81,
+    },
+  };
+
+  const renderRaw = (options, payload) => {
+    const prefs = normalizePreferences(options);
+    const segs = collectSegments(payload, prefs, null, { now: baseNow });
+    return renderLine(segs, prefs, { width: 120, color: options.colorDepth !== 'none', env: {} });
+  };
+
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', segments: ['cache'], items: { cache: { format: '{hit}% hit' } } }, warmPayload)),
+    '\uf1c0 81% hit',
+  );
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', segments: ['cache'], items: { cache: { format: '{hit}%' } } }, warmPayload)),
+    '\uf1c0 81%',
+  );
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'], items: { cache: { format: '{hit}% hit' } } }, warmPayload)),
+    '81% hit',
+  );
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'], items: { cache: { format: '{hit}%' } } }, warmPayload)),
+    '81%',
+  );
+
+  // Cold cache with hit-only format keeps normal cache color (catppuccin-mocha cache #89dceb, not warn #f9e2af)
+  const coldHitOnly = renderRaw(
+    { preset: 'cometix', theme: 'catppuccin-mocha', colorDepth: 'truecolor', segments: ['cache'], items: { cache: { format: '{hit}% hit' } } },
+    coldPayload,
+  );
+  assert.equal(stripAnsi(coldHitOnly), '\uf1c0 81% hit');
+  assert.match(coldHitOnly, /38;2;137;220;235m81% hit/);
+  assert.doesNotMatch(coldHitOnly, /38;2;249;226;175m/);
+
+  // Cold cache with hit-only format + gauge/bar reflects hit% (81%) rather than TTL remaining (0%)
+  const coldGaugeNerd = renderRaw(
+    { preset: 'cometix', theme: 'catppuccin-mocha', colorDepth: 'truecolor', segments: ['cache'], items: { cache: { widget: 'gauge', format: '{hit}%' } } },
+    coldPayload,
+  );
+  assert.equal(stripAnsi(coldGaugeNerd), '\u{f0aa3} 81%');
+  assert.match(coldGaugeNerd, /38;2;137;220;235m/);
+
+  const coldGaugeUnicode = stripAnsi(renderRaw(
+    { preset: 'cometix', icons: 'unicode', segments: ['cache'], items: { cache: { widget: 'gauge', format: '{hit}%' } } },
+    coldPayload,
+  ));
+  assert.equal(coldGaugeUnicode, '◕ 81%');
+
+  const coldBar = stripAnsi(renderRaw(
+    { preset: 'cometix', segments: ['cache'], items: { cache: { widget: 'bar', format: '{hit}% hit' } } },
+    coldPayload,
+  ));
+  assert.equal(coldBar, '\uf1c0 ▰▰▰▰▰▰▱▱ 81% hit');
+
+  // First-request positive cache hit renders hit-only styles, while requests=1 & hit_ratio=0.0 keeps hiding 0% hit
+  const firstTurnHit = {
+    prompt_cache: { warm: true, caching_observed: true, ttl: '5m', expires_at: 1_790_813_060, requests: 1, hit_ratio: 0.81 },
+  };
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'], items: { cache: { format: '{hit}% hit' } } }, firstTurnHit)),
+    '81% hit',
+  );
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'], items: { cache: { format: '{hit}%' } } }, firstTurnHit)),
+    '81%',
+  );
+
+  const firstTurnZero = {
+    prompt_cache: { warm: true, caching_observed: true, ttl: '5m', expires_at: 1_790_813_060, requests: 1, hit_ratio: 0.0 },
+  };
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'] }, firstTurnZero)),
+    '4:20',
+  );
+  assert.equal(
+    stripAnsi(renderRaw({ preset: 'cometix', icons: 'none', segments: ['cache'], items: { cache: { format: '{hit}%' } } }, firstTurnZero)),
+    '4:20',
+  );
 });
 
 test('context defaults to a dynamic proportional ring (gauge) with severity coloring', () => {
