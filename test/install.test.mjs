@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -285,4 +285,31 @@ test('installed renderer enriches payload.subagents with local conversation_summ
   assert.equal(lines.length, 2);
   assert.match(lines[0], /Gemini 4 Neon/);
   assert.match(lines[1], /\\- research \/ Repo Scanner \| Gemini 4 Neon \| 50% \/ 100k \| 80% hit \| \$0\.08 \| \* 1m1[456]s/);
+});
+
+test('installed renderer computes live git diff stats from the workspace repository', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'ascii', '--segments', 'git'));
+  const prefsPath = join(f.directory, 'agy-cli-statusline', 'statusline.json');
+  const prefs = JSON.parse(readFileSync(prefsPath, 'utf8'));
+  prefs.items = { git: { format: '{branch}[ · {files}f[ {added}][ {deleted}]]' } };
+  writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+
+  const repo = mkdtempSync(join(tmpdir(), 'agy-install-git-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const runGit = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  runGit('init', '-b', 'main');
+  runGit('config', 'user.email', 'test@example.com');
+  runGit('config', 'user.name', 'Test User');
+  writeFileSync(join(repo, 'app.txt'), 'one\ntwo\n');
+  runGit('add', 'app.txt');
+  runGit('commit', '-m', 'init');
+  writeFileSync(join(repo, 'app.txt'), 'one\ntwo-edited\nthree\n');
+  writeFileSync(join(repo, 'extra.txt'), 'x\ny\n');
+
+  const output = succeeded(f.render({
+    workspace: { current_dir: repo },
+    terminal_width: 120,
+  }));
+  assert.match(output, /^main \/ 2f \+4 -1\n?$/);
 });

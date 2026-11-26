@@ -533,3 +533,38 @@ test('the editor previews and configures the subagents tree and inline widgets',
   assert.equal((await result).saved, true);
   assert.deepEqual(saved.items, { subagents: { widget: 'inline' } });
 });
+
+test('the editor wraps git available fields cleanly, previews diff stats across combinations, and saves custom format', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 80;
+  stdout.rows = 30;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['model', 'git'] }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+
+  // Open layout -> select Git (index 1) -> edit
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, 'e', { name: 'e' });
+
+  const initialFrame = frameText(stdout);
+  assert.match(initialFrame, /编辑区块：Git/);
+  assert.match(initialFrame, /\{files\}/);
+  assert.match(initialFrame, /\{added\}/);
+  assert.match(initialFrame, /\{deleted\}/);
+
+  // Move from icon -> format and cycle to first diff-stat combination
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /main \* ↑1 2f08999 · 4f \+128 -34/);
+
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.items.git.format, '{branch}[ {dirty}][ {ahead}][ {behind}][ {sha}][ · {files}f[ {added}][ {deleted}]]');
+});
