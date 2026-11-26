@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { colorDepth, paint, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
+import { CCLINE_PALETTES, CCLINE_PRESETS } from '../lib/ccline-data.mjs';
+import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
+import { renderLine } from '../lib/render.mjs';
+import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
+import { collectSegments } from '../lib/segments.mjs';
+
+function render(options, payload = samplePayload(), width = 120) {
+  const preferences = normalizePreferences(options);
+  const segments = collectSegments(payload, preferences, payload.vcs?.type === 'git' ? SAMPLE_GIT : null);
+  return renderLine(segments, preferences, { width, env: {} });
+}
+
+test('all upstream named presets render, keeping their supported rows and color modes', () => {
+  assert.deepEqual(Object.keys(CCLINE_PRESETS), ['cometix', 'minimal', 'dashboard', 'budget', 'cache-aware', 'focus', 'zen', 'powerline']);
+  for (const id of Object.keys(CCLINE_PRESETS)) assert.notEqual(render({ preset: id }).trim(), '', id);
+  const dashboard = render({ preset: 'dashboard', colorDepth: '256' }, samplePayload(), 160);
+  const rows = dashboard.split('\n');
+  assert.equal(rows.length, 3);
+  assert.match(stripAnsi(rows[0]), /Gemini.*main.*\$1\.284/);
+  assert.match(stripAnsi(rows[1]), /42%.*5h.*cache/);
+  assert.match(stripAnsi(rows[2]), /atlas-feature/);
+  assert.equal(visibleWidth(rows[0]), 160);
+  assert.match(dashboard, /48;5;\d+/);
+  assert.match(dashboard, /▀/);
+  assert.match(render({ preset: 'zen' }), /^[\x20-\x7e]+$/);
+  assert.doesNotMatch(render({ preset: 'minimal', colorDepth: 'none' }), /◆|◔|≈|\x1b/);
+});
+
+test('the 13 upstream palettes retain exact RGB data and have a 256-color rendering', () => {
+  assert.deepEqual(Object.keys(CCLINE_PALETTES), [
+    'terminal', 'catppuccin-mocha', 'catppuccin-latte', 'dracula', 'nord', 'tokyo-night', 'rose-pine', 'gruvbox',
+    'anthropic-clay', 'powerline-dark', 'powerline-light', 'powerline-rose-pine', 'powerline-tokyo-night',
+  ]);
+  assert.deepEqual(CCLINE_PALETTES['powerline-tokyo-night'].segments.identity, ['#191b29', '#fca7ea']);
+  assert.match(render({ preset: 'powerline', colorDepth: 'truecolor' }), /38;2;252;167;234;48;2;25;27;41/);
+  for (const theme of Object.keys(CCLINE_PALETTES).filter(name => name !== 'terminal')) {
+    assert.match(render({ preset: 'minimal', theme, colorDepth: '256' }), /\x1b\[38;5;\d+m/, theme);
+  }
+  assert.equal(paint('#444444', '256:208', 'x', '256'), '\x1b[38;5;238;48;5;208mx\x1b[0m');
+  assert.equal(paint('16:14', '16:0', 'x', '256'), '\x1b[96;40mx\x1b[0m');
+  assert.equal(colorDepth('auto', { env: { TERM: 'xterm-256color' } }), '256');
+  assert.equal(colorDepth('auto', { env: { COLORTERM: 'truecolor' } }), 'truecolor');
+  assert.equal(colorDepth('256', { env: { NO_COLOR: '1' } }), 'none');
+});
+
+test('missing telemetry hides unused rows and anonymous quotas stay anonymous', () => {
+  const quota = { quota: { unknown: { remaining_fraction: 0.1, reset_in_seconds: 3600 } } };
+  assert.equal(render({ preset: 'budget' }, quota), '');
+  assert.equal(render({ preset: 'dashboard' }, { model: { display_name: 'A' } }).split('\n').length, 1);
+  const input = { context_window: { used_percentage: 0.8, total_input_tokens: 700, total_output_tokens: 100 } };
+  assert.match(stripAnsi(render({ preset: 'cometix' }, input)), /1% · 800 tokens/);
+  for (const width of [1, 10, 35, 80]) {
+    for (const id of Object.keys(CCLINE_PRESETS)) {
+      const rows = render({ preset: id }, samplePayload(), width).split('\n');
+      for (const row of rows) assert.ok(visibleWidth(row) <= width, `${id}, ${width}, ${stripAnsi(row)}`);
+    }
+  }
+});
+
+test('quota windows display usage and the original five-cell gauge rounds as before', () => {
+  const quota = { quota: { 'gemini-5h': { remaining_fraction: 0.8 } } };
+  assert.match(stripAnsi(render({ preset: 'budget' }, quota)), /5h 20%/);
+  const input = { context_window: { used_percentage: 19 } };
+  assert.match(stripAnsi(render({ preset: 'focus-legacy' }, input)), /19% #----/);
+});
+
+test('version-one Focus migrates without overwriting custom settings', () => {
+  const previous = normalizePreferences({ version: 1, preset: 'focus', skin: 'bracket' });
+  assert.equal(previous.preset, 'focus-legacy');
+  assert.equal(previous.skin, 'bracket');
+  assert.deepEqual(previous.segments, ['model', 'dir', 'git', 'context']);
+  const current = normalizePreferences({ preset: 'focus', colorDepth: '256' });
+  assert.equal(presetRows(current).length, 2);
+  assert.equal(current.colorDepth, '256');
+});

@@ -5,7 +5,7 @@
   "bin": {
     "agy-cli-statusline": "bin/agy-cli-statusline.mjs"
   },
-  "files": ["bin/", "lib/", "plugin.json", "skills/"],
+  "files": ["bin/", "lib/", "plugin.json", "skills/", "THIRD_PARTY_NOTICES.md"],
   "engines": {
     "node": ">=22"
   },

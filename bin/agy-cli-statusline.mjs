@@ -11,12 +11,13 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { confirmReplace, runEditor } from "../lib/editor.mjs";
+import { confirmReplace, runEditor, selectLanguage } from "../lib/editor.mjs";
 import { configRoot } from "../lib/paths.mjs";
 import {
   enumNames,
   normalizePreferences,
   parseSegments,
+  SEGMENT_IDS,
   PreferenceError,
 } from "../lib/preferences.mjs";
 import { SAMPLE_GIT, samplePayload } from "../lib/sample.mjs";
@@ -40,14 +41,15 @@ configure options
   --theme NAME           ${enumNames("theme").join(" | ")}
   --skin NAME            ${enumNames("skin").join(" | ")}
   --icons NAME           ${enumNames("icons").join(" | ")}
-  --segments CSV         ordered ids: model,dir,git,context,quota,cost,state,cycle,sandbox,vcs
+  --color-depth MODE     auto | truecolor | 256 | 16 | none
+  --segments CSV         ordered ids: ${SEGMENT_IDS.join(",")}
   --replace              replace a statusLine command this tool does not own
 
 preview options
-  the same --preset/--theme/--skin/--icons/--segments flags, plus nothing is written
+  the same style and layout options as configure; no files are written
 
-No arguments installs the default (saved preferences win) and opens the editor
-on a TTY. A statusLine owned by something else is not replaced without --replace
+On a TTY, choose a language before opening the editor. First-time setup
+registers the status line; existing preferences are preserved. A statusLine owned by something else is not replaced without --replace
 or an explicit confirmation. AGY_CLI_STATUSLINE_HOME overrides the config root
 (~/.gemini/antigravity-cli) for tests.
 `;
@@ -98,11 +100,14 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
     );
     return current.ownership === "foreign" ? 3 : 0;
   }
+  const language = await selectLanguage({ stdin, stdout });
+  if (!language) return 0;
+  const zh = language === "zh";
   let replace = flags.replace === true;
   if (current.ownership === "foreign" && !replace) {
-    replace = await confirmReplace({ stdin, stdout, command: current.statusLine?.command || "" });
+    replace = await confirmReplace({ stdin, stdout, language, command: current.statusLine?.command || "" });
     if (!replace) {
-      stderr.write("left the existing statusLine unchanged\n");
+      stderr.write(zh ? "已保留现有状态栏\n" : "left the existing statusLine unchanged\n");
       return 3;
     }
   }
@@ -114,11 +119,13 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
     preferences: starting,
     stdin,
     stdout,
+    language,
     onSave: async (preferences) => {
       install(root, preferences, { sourceDir: SOURCE_DIR });
     },
   });
-  stderr.write(session.saved ? "saved\n" : "cancelled\n");
+  if (zh) stderr.write(session.saved ? "已保存\n" : "已取消\n");
+  else stderr.write(session.saved ? "saved\n" : "cancelled\n");
   return 0;
 }
 
@@ -159,7 +166,7 @@ function resolveWrite(current, flags) {
 
 function explicit(flags) {
   const out = {};
-  for (const key of ["preset", "theme", "skin", "icons"]) {
+  for (const key of ["preset", "theme", "skin", "icons", "colorDepth"]) {
     if (flags[key] != null) out[key] = flags[key];
   }
   if (flags.segments != null) out.segments = parseSegments(flags.segments);
@@ -167,7 +174,7 @@ function explicit(flags) {
 }
 
 function hasWriteFlags(flags) {
-  return ["preset", "theme", "skin", "icons", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
+  return ["preset", "theme", "skin", "icons", "colorDepth", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
 }
 
 function publicInfo(info) {
@@ -184,7 +191,8 @@ function publicInfo(info) {
       theme: enumNames("theme"),
       skin: enumNames("skin"),
       icons: enumNames("icons"),
-      segments: ["model", "dir", "git", "context", "quota", "cost", "state", "cycle", "sandbox", "vcs"],
+      colorDepth: ["auto", "truecolor", "256", "16", "none"],
+      segments: SEGMENT_IDS,
     },
   };
 }
@@ -205,11 +213,11 @@ function parseArgs(argv) {
       flags.replace = true;
       continue;
     }
-    const known = ["--preset", "--theme", "--skin", "--icons", "--segments"];
+    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--segments"];
     if (!known.includes(token)) throw new UsageError(`unknown option '${token}'`);
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) throw new UsageError(`${token} needs a value`);
-    flags[token.slice(2)] = value;
+    flags[token === "--color-depth" ? "colorDepth" : token.slice(2)] = value;
     index += 1;
   }
   return flags;

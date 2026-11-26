@@ -16,7 +16,7 @@ npx agy-cli-statusline
 
 From a checkout, run `node bin/agy-cli-statusline.mjs`.
 
-The command registers the footer and opens the editor. Use the editor's on-screen keys to select a preset, change the style, enable or reorder segments, and save. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
+Choose **English** or **简体中文**, then press **Enter**. Use the editor to select a preset, change the style or color depth, and save. On first launch, the command also registers the footer. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
 
 ## Configure from inside agy
 
@@ -40,6 +40,16 @@ Both install methods share preferences under `~/.gemini/antigravity-cli/agy-cli-
 
 The editor uses sample sessions to show each metric. In agy the footer uses live session data and hides unavailable metrics. Select Unicode or ASCII icons if your terminal does not use a Nerd Font.
 
-## Visual reference
+## Use CCometixLine presets and palettes
 
-[CCometixLine](https://github.com/Haleclipse/CCometixLine) inspired the live preview, preset workflow, and colored status segments.
+Choose `cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, or `powerline`. The editor includes all 13 CCometixLine palettes and retains the original agy-cli-statusline styles. Existing version 1 `focus` settings use `focus-legacy`.
+
+To preview Dashboard in 256 colors from the checkout, run:
+
+```sh
+node bin/agy-cli-statusline.mjs preview --preset dashboard --color-depth 256
+```
+
+Choose `auto`, `truecolor`, `256`, `16`, or `none` for color depth. `auto` checks `COLORTERM` and `TERM`. `zen` defaults to `none`. agy provides model, context, quota, cost, and cache-token data. The presets skip unavailable metrics, including Claude Code updates, compaction thresholds, context history, and cache expiration. A quota window appears when agy identifies the bucket as five-hour or weekly.
+
+See [third-party notices](./THIRD_PARTY_NOTICES.md) for the CCometixLine source and license.
