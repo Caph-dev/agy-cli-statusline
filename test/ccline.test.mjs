@@ -447,3 +447,77 @@ test('quota 5h and 7d pace indicators color red when ahead, green when behind, a
   const dashboard = render({ preset: 'dashboard', colorDepth: 'truecolor' }, aheadBehind, 160);
   assert.match(dashboard, /\x1b\[38;2;17;17;17;48;2;250;179;135m⇡5%\x1b\[0m/);
 });
+
+test('subagents segment renders agy-zh-pack aligned tree, prunes empty columns, caps at 4 rows, colors states, and supports inline widget', () => {
+  // 1. Bare payload.subagents (name, role, status only) prunes empty model/ctx/cache/cost columns cleanly
+  const barePayload = {
+    model: { display_name: 'Gemini 4 Neon' },
+    subagents: [
+      { name: 'research', role: 'Paper Reviewer', status: 'running' },
+      { name: 'self', role: 'self', status: 'waiting' }, // role === name is deduplicated
+      { name: 'explore', role: 'Done Task', status: 'completed' },
+    ],
+  };
+  const bareAnsi = render({ preset: 'cometix', segments: ['model', 'subagents'], colorDepth: 'truecolor', theme: 'catppuccin-mocha' }, barePayload, 140);
+  const bareLines = bareAnsi.split('\n');
+  assert.equal(bareLines.length, 4); // 1 main row + 3 subagent rows
+  const plainBare = bareLines.slice(1).map(stripAnsi);
+  assert.match(plainBare[0], /^ ├ \u{f04aa} research · Paper Reviewer \| ● running$/u);
+  assert.match(plainBare[1], /^ ├ \u{f04aa} self\s+\| ● waiting$/u);
+  assert.doesNotMatch(plainBare[1], /self · self/);
+  assert.match(plainBare[2], /^ └ \u{f04aa} explore · Done Task\s+\| ✓ done$/u);
+  // Column alignment: all '|' separators sit at the exact same visible column!
+  const sepCols = plainBare.map((line) => visibleWidth(line.slice(0, line.indexOf('|'))));
+  assert.equal(sepCols[0], sepCols[1]);
+  assert.equal(sepCols[1], sepCols[2]);
+  // Status colors in catppuccin-mocha: running -> ok (#a6e3a1 = 166;227;161), waiting -> warn (#f9e2af = 249;226;175), done -> muted (#6c7086 = 108;112;134)
+  assert.match(bareLines[1], /38;2;166;227;161mrunning/);
+  assert.match(bareLines[2], /38;2;249;226;175mwaiting/);
+  assert.match(bareLines[3], /38;2;108;112;134mdone/);
+
+  // 2. Cap at MAX_SUBS = 4 rows with overflow line, sorting active subagents before finished ones, and skipping PLACEHOLDER models
+  const manyPayload = {
+    subagents: [
+      { name: 'done1', role: 'Finished First', status: 'completed', duration_ms: 12_000, steps: 3 },
+      { name: 'run1', role: 'Active One', model: 'PLACEHOLDER_M530', status: 'running', duration_ms: 45_000 },
+      { name: 'run2', role: 'Active Two', model: 'Gemini 4 Neon', status: 'running', duration_ms: 95_000 },
+      { name: 'wait1', role: 'Needs Approval', status: 'waiting' },
+      { name: 'done2', role: 'Finished Second', status: 'completed', duration_ms: 20_000, steps: 5 },
+      { name: 'done3', role: 'Finished Third', status: 'completed', duration_ms: 30_000, steps: 7 },
+    ],
+  };
+  const manyLines = stripAnsi(render({ preset: 'cometix', segments: ['subagents'] }, manyPayload, 160)).split('\n');
+  assert.equal(manyLines.length, 5); // 4 subagents + overflow line
+  assert.match(manyLines[0], /^ ├ .*run1 · Active One/);
+  assert.doesNotMatch(manyLines[0], /PLACEHOLDER_M530/);
+  assert.match(manyLines[1], /^ ├ .*run2 · Active Two.*Gemini 4 Neon.*● 1m35s/);
+  assert.match(manyLines[2], /^ ├ .*wait1 · Needs Approval.*● waiting/);
+  assert.match(manyLines[3], /^ ├ .*done1 · Finished First.*✓ done 12s · 3 steps/);
+  assert.match(manyLines[4], /^ └ \+2 more subagents$/);
+
+  // 3. Inline widget renders compact summary on the main row with custom format support
+  const inline = stripAnsi(render(
+    {
+      preset: 'cometix',
+      segments: ['model', 'subagents'],
+      items: { subagents: { widget: 'inline', format: '{total} subagents · {cost}' } },
+    },
+    samplePayload(),
+    140,
+  ));
+  assert.equal(inline.split('\n').length, 1);
+  assert.match(inline, /\u{f04aa} 2 subagents · \$0\.48$/u);
+
+  // 4. Empty/missing subagents renders zero extra lines
+  const noSubs = stripAnsi(render({ preset: 'studio' }, { model: { display_name: 'Model' } }, 120));
+  assert.equal(noSubs.split('\n').length, 1);
+
+  // 5. ASCII mode stays strictly ASCII and avoids duplicate '$$' in unicode mode
+  const asciiTree = stripAnsi(render({ preset: 'cometix', icons: 'ascii', segments: ['subagents'] }, samplePayload(), 160));
+  assert.match(asciiTree, /^[\x20-\x7e\n]+$/);
+  assert.match(asciiTree, /\|- research \/ Codebase Reviewer.*\* 1m05s/);
+  assert.match(asciiTree, /\\- explore \/ Dependency Audit.*ok done 1m40s \/ 9 steps/);
+
+  const studioTree = stripAnsi(render({ preset: 'studio' }, samplePayload(), 160));
+  assert.doesNotMatch(studioTree, /\$\s+\$/);
+});

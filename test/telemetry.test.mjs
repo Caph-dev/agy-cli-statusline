@@ -363,3 +363,116 @@ test('summarizeConversationCache computes session hit ratio, warm/cold TTL, miss
   assert.equal(formatMoney(0.005), '$0');
   assert.equal(formatMoney(123.4), '$123');
 });
+
+test('readTelemetry discovers nested subagents from conversation_summaries.db and enriches with model, context, cache, cost, duration, and 10s hide rule', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-subagents-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const convDir = join(root, 'conversations');
+  mkdirSync(convDir, { recursive: true });
+  const summaryPath = join(root, 'conversation_summaries.db');
+
+  const rootId = '10000000-0000-0000-0000-000000000001';
+  const subRunId = '20000000-0000-0000-0000-000000000002';
+  const subNestedDoneId = '30000000-0000-0000-0000-000000000003';
+  const subStaleId = '40000000-0000-0000-0000-000000000004';
+  const otherConvId = '50000000-0000-0000-0000-000000000005';
+
+  const now = Date.parse('2026-11-26T15:00:00Z');
+  const nowSec = Math.floor(now / 1000);
+  const tsBlob = (sec) => fv(1, sec);
+  const rawSummary = (createdSec, modifiedSec, rootConv) => Buffer.concat([
+    fb(3, tsBlob(modifiedSec)),
+    fb(7, tsBlob(createdSec)),
+    fb(17, fb(6, rootConv)),
+  ]);
+
+  // Write conversation_summaries.db with a running child, a nested recently-completed grandchild (4s ago),
+  // a stale completed child (30s ago -> hidden after 10s), and an unrelated conversation.
+  const sdb = new DatabaseSync(summaryPath);
+  sdb.exec(`
+    create table conversation_summaries (
+      conversation_id text primary key,
+      title text not null default '',
+      step_count integer not null default 0,
+      last_modified_time datetime not null,
+      status text not null default '',
+      agent_name text not null default '',
+      parent_conversation_id text not null default '',
+      nesting_depth integer not null default 0,
+      killed numeric not null default false,
+      raw_summary blob
+    );
+    create table conversation_parents (conversation_id text primary key, parent_id text not null);
+  `);
+  const insSum = sdb.prepare('insert into conversation_summaries values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  insSum.run(subRunId, 'Codebase Reviewer', 12, '2026-11-26 14:59:55+00:00', 'CASCADE_RUN_STATUS_RUNNING', 'research', rootId, 1, 0, rawSummary(nowSec - 65, nowSec - 5, rootId));
+  insSum.run(subNestedDoneId, 'Dependency Audit', 9, '2026-11-26 14:59:56+00:00', 'CASCADE_RUN_STATUS_IDLE', 'explore', subRunId, 2, 0, rawSummary(nowSec - 104, nowSec - 4, rootId));
+  insSum.run(subStaleId, 'Old Finished Task', 4, '2026-11-26 14:59:30+00:00', 'CASCADE_RUN_STATUS_IDLE', 'research', rootId, 1, 0, rawSummary(nowSec - 180, nowSec - 30, rootId));
+  insSum.run(otherConvId, 'Unrelated', 2, '2026-11-26 14:59:59+00:00', 'CASCADE_RUN_STATUS_RUNNING', 'research', '99999999-9999-9999-9999-999999999999', 1, 0, null);
+  sdb.prepare('insert into conversation_parents values (?, ?)').run(subNestedDoneId, subRunId);
+  sdb.close();
+
+  // Running subagent DB: Gemini 4 Neon (same family as main -> estimates context % against 200k window!), 90% cache hit, $0.3675 own cost
+  writeConvDb(join(convDir, `${subRunId}.db`), {
+    steps: [{ idx: 1, sec: nowSec - 60, exec: 'sr1' }],
+    gens: [{
+      steps: [1], exec: 'sr1', model: 'gemini-4-neon', disp: 'Gemini 4 Neon (High)',
+      usage: { inp: 10_000, cr: 90_000, cw: 0, out: 1_000, rid: 'sub-run-1' }, ttft: 1, stream: 4,
+    }],
+  });
+
+  // Nested recently completed subagent DB: Hydrogen (different family -> tokens only, no invented %), 80% cache hit
+  writeConvDb(join(convDir, `${subNestedDoneId}.db`), {
+    steps: [{ idx: 1, sec: nowSec - 90, exec: 'sn1' }],
+    gens: [{
+      steps: [1], exec: 'sn1', model: 'gemini-4-hydrogen', disp: 'Gemini 4 Hydrogen',
+      usage: { inp: 10_000, cr: 40_000, cw: 0, out: 1_000, rid: 'sub-nested-1' }, ttft: 1, stream: 3,
+    }],
+  });
+
+  const tel = await readTelemetry({
+    conversationId: rootId,
+    needSubagents: true,
+    contextWindowSize: 200_000,
+    mainModel: 'gemini-4-neon Gemini 4 Neon (High)',
+    root,
+    convDirs: [convDir],
+    summaryDbPath: summaryPath,
+    cacheFile: null,
+    now,
+  });
+
+  assert.equal(tel.subagents.length, 3);
+  const runSub = tel.subagents.find((s) => s.id === subRunId);
+  assert.equal(runSub.typeName, 'research');
+  assert.equal(runSub.role, 'Codebase Reviewer');
+  assert.equal(runSub.model, 'Gemini 4 Neon (High)');
+  assert.equal(runSub.contextTokens, 100_000);
+  assert.equal(runSub.contextPct, 50); // 100k / 200k (same model family!)
+  assert.equal(runSub.cacheHit, 90);
+  assert.ok(runSub.costUsd > 0);
+  assert.equal(runSub.status, 'running');
+  assert.equal(runSub.durationMs, 65_000);
+
+  const nestedSub = tel.subagents.find((s) => s.id === subNestedDoneId);
+  assert.equal(nestedSub.typeName, 'explore');
+  assert.equal(nestedSub.contextTokens, 50_000);
+  assert.equal(nestedSub.contextPct, null); // different model family -> no invented window %
+  assert.equal(nestedSub.cacheHit, 80);
+  assert.equal(nestedSub.steps, 9);
+
+  // collectSegments filters out subStaleId (finished 30s ago >= 10s) and renders aligned tree
+  const prefs = normalizePreferences({ preset: 'cometix', segments: ['subagents'] });
+  const segs = collectSegments(
+    { subagents: [{ conversation_id: subRunId, name: 'research', role: 'Codebase Reviewer', status: 'running' }] },
+    prefs,
+    null,
+    { telemetry: tel, now },
+  );
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].subagents.length, 2); // running + nested done (4s ago); stale (30s ago) hidden!
+  const lines = stripAnsi(renderLine(segs, prefs, { width: 160, color: false })).split('\n');
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^ ├ .*research · Codebase Reviewer.*Gemini 4 Neon \(High\).*50% · 100k.*90% hit.*● 1m05s$/);
+  assert.match(lines[1], /^ └ .*explore · Dependency Audit.*Gemini 4 Hydrogen.*50k.*80% hit.*✓ done 1m40s · 9 steps$/);
+});

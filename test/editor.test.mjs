@@ -497,3 +497,39 @@ test('every segment provides 3-5 unique Nerd Font icon alternatives and cycles c
   assert.equal((await result).saved, true);
   assert.equal(saved.items.cache.icon, '\u{f140c}');
 });
+
+test('the editor previews and configures the subagents tree and inline widgets', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['model', 'subagents'] }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+  // Main preview shows aligned subagent tree lines
+  assert.match(frameText(stdout), /├ .*research · Codebase Reviewer/);
+  assert.match(frameText(stdout), /└ .*explore · Dependency Audit/);
+
+  // Open layout, select subagents (index 1), press 'e' to edit
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /编辑区块：子代理/);
+  assert.match(frameText(stdout), /> 组件\s+默认 \(tree\)\s+树形多行/);
+  assert.doesNotMatch(frameText(stdout), /模板/); // hidden in tree mode
+
+  // Switch widget from tree -> inline: format control appears and preview becomes single-line summary
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 组件\s+inline\s+单行汇总/);
+  assert.match(frameText(stdout), /模板/);
+  assert.match(frameText(stdout), /1 running · 1 done/);
+
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.deepEqual(saved.items, { subagents: { widget: 'inline' } });
+});

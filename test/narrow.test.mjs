@@ -84,4 +84,19 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
   for (const line of quotaLines) assert.ok(visibleWidth(line) <= 30, line);
   assert.match(quotaWrapped, /5h 38% \+19% \/ 4h01m/);
   assert.match(quotaWrapped, /7d 82% \+27% \/ 3d3h/);
+
+  // Subagent tree wraps cleanly across narrow widths without dropping columns or exceeding width
+  for (const width of [60, 40, 12, 1]) {
+    const wrapped = renderAt({ preset: 'cometix', segments: ['model', 'subagents'] }, width, { color: true });
+    const lines = wrapped.split('\n');
+    for (const line of lines) assert.ok(visibleWidth(line) <= width, `subagents width=${width}: ${line}`);
+    if (width >= 40) {
+      assert.match(wrapped, /research · Codebase Reviewer/);
+      assert.match(wrapped, /Gemini 4 Neon \(High\)/);
+      assert.match(wrapped, /97% hit/);
+      assert.match(wrapped, /\$0\.40/);
+      assert.match(wrapped, /1m05s/);
+      assert.match(wrapped, /done 1m40s · 9 steps/);
+    }
+  }
 });

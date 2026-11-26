@@ -222,3 +222,67 @@ test('installed renderer computes live tps, cache stats, session cost fallback, 
   assert.match(output, /\$1\.560/);
   assert.match(output, /\$1\.56 today/);
 });
+
+test('installed renderer enriches payload.subagents with local conversation_summaries.db and subagent DB metrics', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'ascii', '--segments', 'model,subagents'));
+  const rootId = '11111111-2222-3333-4444-555555555555';
+  const subId = '66666666-7777-8888-9999-aaaaaaaaaaaa';
+  const convDir = join(f.directory, 'conversations');
+  mkdirSync(convDir, { recursive: true });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const varint = (n) => {
+    const out = [];
+    let v = n;
+    do { let b = v % 128; v = Math.floor(v / 128); if (v) b |= 0x80; out.push(b); } while (v);
+    return Buffer.from(out);
+  };
+  const fv = (field, n) => Buffer.concat([varint(field * 8), varint(n)]);
+  const fb = (field, v) => {
+    const buf = Buffer.isBuffer(v) ? v : Buffer.from(String(v), 'utf8');
+    return Buffer.concat([varint(field * 8 + 2), varint(buf.length), buf]);
+  };
+  const dur = (s) => Buffer.concat([fv(1, Math.floor(s)), fv(2, Math.round((s % 1) * 1e9))]);
+
+  const sdb = new DatabaseSync(join(f.directory, 'conversation_summaries.db'));
+  sdb.exec(`
+    create table conversation_summaries (
+      conversation_id text primary key,
+      title text not null default '',
+      step_count integer not null default 0,
+      last_modified_time datetime not null,
+      status text not null default '',
+      agent_name text not null default '',
+      parent_conversation_id text not null default '',
+      nesting_depth integer not null default 0,
+      killed numeric not null default false,
+      raw_summary blob
+    );
+  `);
+  const rawSum = Buffer.concat([fb(3, fv(1, nowSec - 2)), fb(7, fv(1, nowSec - 75))]);
+  sdb.prepare('insert into conversation_summaries values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    subId, 'Repo Scanner', 8, new Date((nowSec - 2) * 1000).toISOString(), 'CASCADE_RUN_STATUS_RUNNING', 'research', rootId, 1, 0, rawSum,
+  );
+  sdb.close();
+
+  const db = new DatabaseSync(join(convDir, `${subId}.db`));
+  db.exec('create table steps (idx integer, metadata blob); create table gen_metadata (data blob);');
+  db.prepare('insert into steps values (?, ?)').run(1, Buffer.concat([fb(1, fv(1, nowSec - 30)), fb(12, 'se1')]));
+  const u = Buffer.concat([fv(2, 20_000), fv(3, 500), fv(5, 80_000), fb(11, 'sub-req-1')]);
+  const cm = Buffer.concat([fb(4, u), fb(11, dur(1)), fb(12, dur(3)), fb(19, 'gemini-4-neon'), fb(21, 'Gemini 4 Neon')]);
+  db.prepare('insert into gen_metadata values (?)').run(Buffer.concat([fb(1, cm), fb(2, varint(1)), fb(4, 'se1')]));
+  db.close();
+
+  const output = succeeded(f.render({
+    conversation_id: rootId,
+    model: { id: 'gemini-4-neon', display_name: 'Gemini 4 Neon' },
+    context_window: { context_window_size: 200_000 },
+    subagents: [{ name: 'research', role: 'Repo Scanner', status: 'running' }],
+    terminal_width: 140,
+  }));
+  const lines = output.trimEnd().split('\n');
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /Gemini 4 Neon/);
+  assert.match(lines[1], /\\- research \/ Repo Scanner \| Gemini 4 Neon \| 50% \/ 100k \| 80% hit \| \$0\.08 \| \* 1m1[456]s/);
+});

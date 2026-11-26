@@ -26,7 +26,7 @@ SOFTWARE.
 
 ---
 
-The local conversation database protobuf reader, API standard pricing table, generation speed (TPS), today's cost estimation, and cache-miss detection logic in `lib/telemetry.mjs` are adapted from [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng (MIT License).
+The local conversation database protobuf reader, API standard pricing table, generation speed (TPS), today's cost estimation, cache-miss detection logic in `lib/telemetry.mjs`, and the aligned multi-line subagent tree component (`subagents`) in `lib/telemetry.mjs`, `lib/segments.mjs`, and `lib/render.mjs` are adapted from [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng (MIT License).
 
 ## MIT License (agy-zh-pack)
 
