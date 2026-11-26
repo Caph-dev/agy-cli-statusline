@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { stripAnsi } from '../lib/ansi.mjs';
 import { confirmReplace, runEditor, selectLanguage } from '../lib/editor.mjs';
-import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
+import { ITEM_ICON_PRESETS, normalizePreferences, presetRows, SEGMENT_IDS } from '../lib/preferences.mjs';
 
 function terminal() {
   const stdin = new PassThrough();
@@ -425,4 +425,46 @@ test('the editor enables and previews tps and cost.today with custom format temp
   press(stdin, 's', { name: 's', ctrl: true });
   assert.equal((await result).saved, true);
   assert.equal(saved.items.tps.format, '{tps} tok/s[ · {ttft}]');
+});
+
+test('every segment provides 3-5 unique Nerd Font icon alternatives and cycles cleanly in the block editor', async () => {
+  for (const id of SEGMENT_IDS) {
+    const list = ITEM_ICON_PRESETS[id];
+    assert.ok(Array.isArray(list), `missing ITEM_ICON_PRESETS for ${id}`);
+    assert.ok(list.length >= 3 && list.length <= 5, `${id} should have 3-5 alternatives, got ${list.length}`);
+    const glyphs = new Set();
+    for (const entry of list) {
+      assert.equal(typeof entry.glyph, 'string');
+      assert.ok(entry.glyph.length > 0, `empty glyph for ${id}`);
+      assert.match(entry.name, /^nf-/);
+      assert.equal(glyphs.has(entry.glyph), false, `duplicate glyph in ${id}`);
+      glyphs.add(entry.glyph);
+    }
+  }
+
+  // Verify cycling on cache (which previously had duplicate undefineds) and saving a Nerd Font preset icon
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix', segments: ['cache'] }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /> 图标\s+默认/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /> 图标\s+（无）/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /nf-md-database_outline/);
+  press(stdin, undefined, { name: 'right' });
+  assert.match(frameText(stdout), /nf-md-lightning_bolt_outline/);
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.items.cache.icon, '\u{f140c}');
 });
