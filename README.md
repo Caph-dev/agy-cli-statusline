@@ -60,6 +60,6 @@ To preview Dashboard in 256 colors from the checkout, run:
 node bin/agy-cli-statusline.mjs preview --preset dashboard --color-depth 256
 ```
 
-Choose `auto`, `truecolor`, `256`, `16`, or `none` for color depth. `auto` checks `COLORTERM` and `TERM`. `zen` defaults to `none`. agy provides model, context, quota, cost, and cache-token data. The presets skip unavailable metrics, including Claude Code updates, compaction thresholds, context history, and cache expiration. A quota window appears when agy identifies the bucket as five-hour or weekly.
+Choose `auto`, `truecolor`, `256`, `16`, or `none` for color depth. `auto` checks `COLORTERM` and `TERM`. `zen` defaults to `none`. agy provides model, context, quota, cost, and cache-token data. The `tps` (generation speed in `tok/s` with optional `{ttft}` / `{median}`) and `cost.today` (estimated today's API-list spend since local midnight) segments read local Antigravity conversation SQLite databases (`~/.gemini/antigravity-cli/conversations/*.db`, read-only via Node's built-in `node:sqlite` with an mtime cache), and `cost` also falls back to the current conversation's estimated spend when agy omits `cost`. The presets skip unavailable metrics, including Claude Code updates, compaction thresholds, context history, and cache expiration. A quota window appears when agy identifies the bucket as five-hour or weekly.
 
-See [third-party notices](./THIRD_PARTY_NOTICES.md) for the CCometixLine source and license.
+See [third-party notices](./THIRD_PARTY_NOTICES.md) for the CCometixLine and agy-zh-pack sources and licenses.

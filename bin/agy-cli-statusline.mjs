@@ -154,6 +154,7 @@ async function runPreview({ flags, stdout }) {
   const line = await renderPayload(payload, preferences, {
     width: payload.terminal_width,
     gitLookup: async () => SAMPLE_GIT,
+    telemetryLookup: async () => null,
     home: SAMPLE_HOME,
   });
   stdout.write(`${line}\n`);

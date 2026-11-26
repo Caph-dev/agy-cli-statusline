@@ -64,6 +64,6 @@ agy plugin install https://github.com/Caph-dev/agy-cli-statusline
 node bin/agy-cli-statusline.mjs preview --preset dashboard --color-depth 256
 ```
 
-色深可选自动、真彩色、256 色、16 色和无色。自动模式读取 `COLORTERM` 和 `TERM`，`zen` 默认无色。状态栏使用 agy 提供的模型、上下文、额度、费用和缓存令牌数据。Claude Code 更新、压缩阈值、上下文趋势和缓存到期时间等缺失指标会省略。五小时和七天额度分段需要 agy 提供可识别的配额窗口。
+色深可选自动、真彩色、256 色、16 色和无色。自动模式读取 `COLORTERM` 和 `TERM`，`zen` 默认无色。状态栏使用 agy 提供的模型、上下文、额度、费用和缓存令牌数据；新增的 `tps`（生成速率 `tok/s`，支持 `{ttft}` / `{median}` 等模板字段）和 `cost.today`（按公开 API 标准价估算本地 0 点起的今日累计费用）通过 Node 内置 `node:sqlite` 只读读取本机 Antigravity 对话库（`~/.gemini/antigravity-cli/conversations/*.db`，带 mtime 缓存），当 agy 未提供 `cost` 时 `cost` 区块也会自动回退为当前对话的估算费用。Claude Code 更新、压缩阈值、上下文趋势和缓存到期时间等缺失指标会省略。五小时和七天额度分段需要 agy 提供可识别的配额窗口。
 
-CCometixLine 的来源和许可证见[第三方声明](./THIRD_PARTY_NOTICES.md)。
+CCometixLine 与 agy-zh-pack 的来源和许可证见[第三方声明](./THIRD_PARTY_NOTICES.md)。

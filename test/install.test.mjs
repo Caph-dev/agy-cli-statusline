@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -175,4 +176,42 @@ test('installed renderer applies persisted per-segment items overrides from stat
     terminal_width: 120,
   }));
   assert.match(output, /# 42% \(116k free\)/);
+});
+
+test('installed renderer computes live tps, session cost fallback, and today cost from local SQLite conversations', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'none', '--segments', 'model,tps,cost,cost.today'));
+  const convId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const convDir = join(f.directory, 'conversations');
+  mkdirSync(convDir, { recursive: true });
+  const db = new DatabaseSync(join(convDir, `${convId}.db`));
+  db.exec('create table steps (idx integer, metadata blob); create table gen_metadata (data blob);');
+  const varint = (n) => {
+    const out = [];
+    let v = n;
+    do { let b = v % 128; v = Math.floor(v / 128); if (v) b |= 0x80; out.push(b); } while (v);
+    return Buffer.from(out);
+  };
+  const fv = (field, n) => Buffer.concat([varint(field * 8), varint(n)]);
+  const fb = (field, v) => {
+    const buf = Buffer.isBuffer(v) ? v : Buffer.from(String(v), 'utf8');
+    return Buffer.concat([varint(field * 8 + 2), varint(buf.length), buf]);
+  };
+  const nowSec = Math.floor(Date.now() / 1000);
+  db.prepare('insert into steps values (?, ?)').run(1, Buffer.concat([fb(1, fv(1, nowSec)), fb(12, 'exec-1')]));
+  const usage = Buffer.concat([fv(2, 500_000), fv(3, 2000), fb(11, 'req-live-1')]);
+  const dur = (s) => Buffer.concat([fv(1, Math.floor(s)), fv(2, Math.round((s % 1) * 1e9))]);
+  const cm = Buffer.concat([fb(4, usage), fb(11, dur(2)), fb(12, dur(8)), fb(19, 'gemini-4-neon'), fb(21, 'Gemini 4 Neon')]);
+  db.prepare('insert into gen_metadata values (?)').run(Buffer.concat([fb(1, cm), fb(2, varint(1)), fb(4, 'exec-1')]));
+  db.close();
+
+  const output = succeeded(f.render({
+    conversation_id: convId,
+    model: { display_name: 'Gemini 4 Neon' },
+    terminal_width: 120,
+  }));
+  // 2000 / (2 + 8) = 200 tok/s; 500k in ($1.50) + 2k out ($0.03) = $1.53
+  assert.match(output, /200 tok\/s/);
+  assert.match(output, /\$1\.530/);
+  assert.match(output, /\$1\.53 today/);
 });

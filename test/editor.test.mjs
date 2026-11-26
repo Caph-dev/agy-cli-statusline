@@ -394,3 +394,35 @@ test('the editor preview wraps full styles on narrow terminals and resolves samp
   assert.equal((await result).saved, false);
   assert.equal(stdin.isRaw, false);
 });
+
+test('the editor enables and previews tps and cost.today with custom format templates', async () => {
+  const { stdin, stdout } = terminal();
+  stdout.columns = 120;
+  stdout.rows = 32;
+  const frames = [];
+  stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({
+      preset: 'cometix',
+      segments: ['model', 'tps', 'cost.today'],
+    }),
+    stdin, stdout, language: 'zh',
+    onSave: async (preferences) => { saved = preferences; },
+  });
+  assert.match(frameText(stdout), /84 tok\/s/);
+  assert.match(frameText(stdout), /\$8\.42 today/);
+
+  // Open layout, edit tps (index 1), cycle format to include {ttft}
+  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
+  press(stdin, '\r', { name: 'return' });
+  press(stdin, undefined, { name: 'down' });
+  press(stdin, 'e', { name: 'e' });
+  assert.match(frameText(stdout), /编辑区块：生成速度/);
+  press(stdin, undefined, { name: 'down' }); // move from icon -> format
+  press(stdin, undefined, { name: 'right' }); // "{tps} tok/s[ · {ttft}]"
+  assert.match(frameText(stdout), /84 tok\/s · 1\.8s/);
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.items.tps.format, '{tps} tok/s[ · {ttft}]');
+});
