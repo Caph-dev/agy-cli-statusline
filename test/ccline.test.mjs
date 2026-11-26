@@ -102,3 +102,45 @@ test('version-one Focus migrates without overwriting custom settings', () => {
   assert.equal(presetRows(current).length, 2);
   assert.equal(current.colorDepth, '256');
 });
+
+test('context format supports percent, used tokens, and used/total ratio with fallbacks', () => {
+  const payload = {
+    model: { display_name: 'Model' },
+    context_window: {
+      used_percentage: 68,
+      current_usage: { input_tokens: 340_000, output_tokens: 0 },
+      total_input_tokens: 900_000,
+      total_output_tokens: 50_000,
+      context_window_size: 500_000,
+    },
+  };
+  assert.match(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, payload)), /68% · 340k\/500k/);
+  assert.match(stripAnsi(render({ preset: 'dashboard', contextFormat: 'ratio' }, payload)), /68% · 340k\/500k/);
+  assert.match(stripAnsi(render({ preset: 'cometix', contextFormat: 'ratio' }, payload)), /68% · 340k\/500k/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'cometix', contextFormat: 'ratio' }, payload)), /tokens/);
+  assert.match(stripAnsi(render({ preset: 'minimal', contextFormat: 'ratio' }, payload)), /68% · 340k\/500k/);
+  assert.match(stripAnsi(render({ preset: 'studio', contextFormat: 'ratio' }, payload)), /68% · 340k\/500k/);
+  assert.match(stripAnsi(render({ preset: 'dashboard', contextFormat: 'percent' }, payload)), /68%/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'dashboard', contextFormat: 'percent' }, payload)), /340k/);
+  assert.match(stripAnsi(render({ preset: 'minimal', contextFormat: 'tokens' }, payload)), /68% · 340k/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'minimal', contextFormat: 'tokens' }, payload)), /500k/);
+
+  const fresh = {
+    context_window: { used_percentage: 0, current_usage: { input_tokens: 0 }, context_window_size: 1_000_000 },
+  };
+  assert.match(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, fresh)), /0% · 0\/1M/);
+
+  const noSize = {
+    context_window: { used_percentage: 68, current_usage: { input_tokens: 340_000 } },
+  };
+  assert.match(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, noSize)), /68% · 340k/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, noSize)), /\//);
+
+  const noTokens = {
+    context_window: { used_percentage: 68, context_window_size: 500_000 },
+  };
+  assert.match(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, noTokens)), /68%/);
+  assert.doesNotMatch(stripAnsi(render({ preset: 'powerline', contextFormat: 'ratio' }, noTokens)), /·/);
+
+  assert.throws(() => normalizePreferences({ contextFormat: 'invalid' }), /unknown context format/);
+});

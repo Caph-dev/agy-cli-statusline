@@ -98,3 +98,22 @@ test('an explicit replacement backs up another status line', t => {
   assert.ok(backup, 'original settings backup should exist');
   assert.deepEqual(JSON.parse(readFileSync(join(f.directory, backup), 'utf8')), previous);
 });
+
+test('configure --context-format persists ratio formatting to the installed renderer', t => {
+  const f = fixture(t);
+  succeeded(f.run('configure', '--preset', 'powerline', '--context-format', 'ratio'));
+  const shown = JSON.parse(succeeded(f.run('configure', '--show')));
+  assert.equal(shown.preferences.contextFormat, 'ratio');
+  assert.deepEqual(shown.enums.contextFormat, ['auto', 'percent', 'tokens', 'ratio']);
+
+  const output = succeeded(f.render({
+    model: { display_name: 'Fixture Model' },
+    context_window: {
+      used_percentage: 68,
+      current_usage: { input_tokens: 340_000, output_tokens: 0 },
+      context_window_size: 500_000,
+    },
+    terminal_width: 100,
+  }));
+  assert.match(output, /68% · 340k\/500k/);
+});

@@ -96,7 +96,7 @@ test('the layout panel grabs, moves, and restores one segment without wrapping',
     stdin, stdout,
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 5; step += 1) press(stdin, undefined, { name: 'down' });
+  for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
   press(stdin, '\r', { name: 'return' });
   assert.match(frameText(stdout), /Segment layout/);
   assert.match(frameText(stdout), /Cost\s+enabled\s+row 1 right/);
@@ -127,4 +127,31 @@ test('the layout panel grabs, moves, and restores one segment without wrapping',
     ['cost', 'model', 'dir'], ['context', 'quota.5h'], ['worktree', 'quota'],
   ]);
   assert.equal(stdin.isRaw, false);
+});
+
+test('the editor configures the context format and updates the live preview', async () => {
+  for (const [language, label, value] of [
+    ['en', 'context', '% · used/total'],
+    ['zh', '上下文', '百分比 · 已用/上限'],
+  ]) {
+    const { stdin, stdout } = terminal();
+    stdout.columns = 100;
+    stdout.rows = 30;
+    const frames = [];
+    stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+    let saved;
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'powerline' }),
+      stdin, stdout, language,
+      onSave: async (preferences) => { saved = preferences; },
+    });
+    for (let step = 0; step < 5; step += 1) press(stdin, undefined, { name: 'down' });
+    press(stdin, undefined, { name: 'left' });
+    assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    assert.match(frameText(stdout), /42% · 84k\/200k/);
+    press(stdin, '\r', { name: 'return' });
+    assert.equal((await result).saved, true);
+    assert.equal(saved.contextFormat, 'ratio');
+    assert.equal(stdin.isRaw, false);
+  }
 });

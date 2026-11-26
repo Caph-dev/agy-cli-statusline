@@ -42,6 +42,7 @@ configure options
   --skin NAME            ${enumNames("skin").join(" | ")}
   --icons NAME           ${enumNames("icons").join(" | ")}
   --color-depth MODE     auto | truecolor | 256 | 16 | none
+  --context-format MODE  ${enumNames("contextFormat").join(" | ")}
   --segments CSV         ordered ids: ${SEGMENT_IDS.join(",")}
   --replace              replace a statusLine command this tool does not own
 
@@ -93,7 +94,7 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
         `config root: ${root}`,
         current.ownership === "foreign"
           ? "a different statusLine is configured. Re-run with: configure --replace ..."
-          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--segments CSV]",
+          : "write a configuration with: configure [--preset NAME] [--theme NAME] [--skin NAME] [--icons NAME] [--context-format MODE] [--segments CSV]",
         "read the current state with: configure --show",
         "",
       ].join("\n"),
@@ -168,7 +169,7 @@ function resolveWrite(current, flags) {
 
 function explicit(flags) {
   const out = {};
-  for (const key of ["preset", "theme", "skin", "icons", "colorDepth"]) {
+  for (const key of ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat"]) {
     if (flags[key] != null) out[key] = flags[key];
   }
   if (flags.segments != null) out.segments = parseSegments(flags.segments);
@@ -176,7 +177,7 @@ function explicit(flags) {
 }
 
 function hasWriteFlags(flags) {
-  return ["preset", "theme", "skin", "icons", "colorDepth", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
+  return ["preset", "theme", "skin", "icons", "colorDepth", "contextFormat", "segments", "replace"].some((key) => flags[key] != null && flags[key] !== false);
 }
 
 function publicInfo(info) {
@@ -194,6 +195,7 @@ function publicInfo(info) {
       skin: enumNames("skin"),
       icons: enumNames("icons"),
       colorDepth: ["auto", "truecolor", "256", "16", "none"],
+      contextFormat: enumNames("contextFormat"),
       segments: SEGMENT_IDS,
     },
   };
@@ -215,11 +217,12 @@ function parseArgs(argv) {
       flags.replace = true;
       continue;
     }
-    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--segments"];
+    const known = ["--preset", "--theme", "--skin", "--icons", "--color-depth", "--context-format", "--segments"];
     if (!known.includes(token)) throw new UsageError(`unknown option '${token}'`);
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) throw new UsageError(`${token} needs a value`);
-    flags[token === "--color-depth" ? "colorDepth" : token.slice(2)] = value;
+    const key = token === "--color-depth" ? "colorDepth" : token === "--context-format" ? "contextFormat" : token.slice(2);
+    flags[key] = value;
     index += 1;
   }
   return flags;
