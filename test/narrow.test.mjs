@@ -71,7 +71,7 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
   assert.doesNotMatch(cometix, /▰|▱/); // cometix uses text widget for context even when layout is flat
   assert.match(cometix, /\uf1c0 cache 42k read · 1\.2k created/);
   assert.match(cometix, /\u{f024b} ~\/…\/atlas/u);
-  assert.match(cometix, /\u{f02a2} main \uf069 \uf0621 2f08999/u);
+  assert.match(cometix, /\u{f02a2} main \* ↑1 2f08999/u);
   assert.match(cometix, /\uf1bb atlas-feature/);
   assert.match(cometix, /\u{f0520} ▀▀▀▀▀▀▀▀ 5h 38% ⇡19% · 4h01m/u);
   assert.match(cometix, /\u{f0520} ▀▀▀▀▀▀▀▀ 7d 82% ⇡27% · 3d3h/u);

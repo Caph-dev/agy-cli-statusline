@@ -130,4 +130,12 @@ test('readGit returns short HEAD SHA and porcelain counts without extra queries,
   assert.equal(detached.sha, expectedSha);
   const detachedOut = stripAnsi(renderLine(collectSegments({}, prefs, detached), prefs, { width: 120, env: {} }));
   assert.equal(detachedOut.split(expectedSha).length - 1, 1);
+
+  // Nerd mode uses crisp single-width inline Git markers (*, ↑, ↓, !)
+  const markedGit = { branch: 'main', sha: expectedSha, detached: false, dirty: true, ahead: 2, behind: 1, conflicts: 0 };
+  const markedOut = stripAnsi(renderLine(collectSegments({}, prefs, markedGit), prefs, { width: 120, env: {} }));
+  assert.match(markedOut, new RegExp(`\\u{f02a2} main \\* ↑2 ↓1 ${expectedSha}`, 'u'));
+  const conflictPrefs = normalizePreferences({ preset: 'cometix', segments: ['git'], items: { git: { format: '{branch} {status}' } } });
+  const conflictOut = stripAnsi(renderLine(collectSegments({}, conflictPrefs, { ...markedGit, conflicts: 1 }), conflictPrefs, { width: 120, env: {} }));
+  assert.match(conflictOut, /\u{f02a2} main !/u);
 });
