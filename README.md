@@ -20,10 +20,10 @@ The command registers the footer and opens the editor. Use the editor's on-scree
 
 ## Configure from inside agy
 
-After the repository is available on GitHub, substitute its actual URL and run:
+Install the plugin from GitHub.
 
 ```sh
-agy plugin install <github-url>
+agy plugin install https://github.com/Caph-dev/agy-cli-statusline
 ```
 
 From a local checkout, use `agy plugin install .` instead.

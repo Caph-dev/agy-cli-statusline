@@ -20,10 +20,10 @@ npx agy-cli-statusline
 
 ## 在 agy 中配置
 
-仓库发布到 GitHub 后，将下列命令中的占位符替换为实际仓库 URL。
+运行以下命令从 GitHub 安装插件。
 
 ```sh
-agy plugin install <github-url>
+agy plugin install https://github.com/Caph-dev/agy-cli-statusline
 ```
 
 如果你已克隆仓库，在仓库根目录运行 `agy plugin install .`。
