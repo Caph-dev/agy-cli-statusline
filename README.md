@@ -1,65 +1,107 @@
 # agy-cli-statusline
 
-[简体中文](./README.zh-CN.md)
+A customizable status line and live-preview terminal editor for Antigravity CLI (`agy`).
 
-Customize the footer in Antigravity CLI. Choose a preset, reorder metrics, and preview the result in a keyboard-driven terminal editor. The editor and agy use the same renderer.
+![Node.js >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white)
+![macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555555?style=flat-square)
+![Zero Dependencies](https://img.shields.io/badge/dependencies-0-blue?style=flat-square)
 
-Requires Node.js 22 or later and Antigravity CLI on macOS or Linux.
+**English** · [简体中文](./README.zh-CN.md)
 
-## Install and open the editor
+## Preview
 
-After the npm package is published, run:
+![Multi-row status line with context ring, cache hit, Git diff stats, quota pace bars, daily spend, and subagent tree](./assets/preview-full.jpg)
+*Full layout with context ring, cache hit ratio, Git diff stats, worktree, TPS, 5h/7d quota pace bars, session & daily spend, and aligned subagent tree.*
+
+![Live agy session wrapping status line rows in a narrower terminal](./assets/preview-live.png)
+*Live `agy` session automatically wrapping overflowing rows onto additional lines at full fidelity.*
+
+## Features
+
+- **Live-preview TUI editor**: bilingual (English / 简体中文), keyboard-driven, powered by the exact same renderer `agy` uses.
+- **Rich telemetry**: 18 built-in segments covering model, context ring/bar, prompt cache, Git diff stats, 5h/7d quota pace, TPS, session & daily spend, and an aligned subagent tree.
+- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in), 18 color palettes, Nerd / Unicode / ASCII icons, and full-fidelity narrow-terminal wrapping.
+- **Safe & standalone**: zero runtime dependencies; registers into `~/.gemini/antigravity-cli/settings.json` with automatic backup if replacing an existing status line.
+
+## Quick Start
+
+Requires **Node.js 22+** and **Antigravity CLI** on **macOS** or **Linux**.
+
+### Interactive editor (recommended)
 
 ```sh
 npx agy-cli-statusline
+# Or from a local checkout:
+node bin/agy-cli-statusline.mjs
 ```
 
-From a checkout, run `node bin/agy-cli-statusline.mjs`.
+Choose **English** or **简体中文**, customize your preset, theme, and segments with live preview, then press `Ctrl+S` and start a new `agy` session. First launch registers the footer automatically (prompting and backing up `settings.json` if another `statusLine` is already configured).
 
-Choose **English** or **简体中文**, then press **Enter**. Use the editor to select a preset, change the style, color depth, directory style (`auto`, `name`, `parent`, `tilde`, `short`, `full`), context display format (`auto`, `percent`, `% · used`, or `% · used/total`, e.g. `68% · 340k/500k`), or whether 5h/7d quota segments show pace deltas (`⇡` / `⇣`), and save. The `context` segment defaults to a dynamic proportional ring (`gauge`: 9-step Nerd Font `󰝦`–`󰪥` / 5-step Unicode `○◔◑◕●`, turning yellow at 70% and red at 90%, while bar presets such as `dashboard`/`budget`/`focus` keep their bars). Quota windows also show reset countdowns, Git shows the short HEAD SHA (and supports optional changed-file counts and line diff stats via `{files}`, `{added}`, `{deleted}` plus built-in format presets in the segment editor), and narrow terminals wrap overflowing rows onto additional lines at full fidelity without degrading or dropping segments. On first launch, the command also registers the footer. Run `agy` in a new session to see the footer. If you already use another status line, the editor asks before replacing it and keeps a backup of the original settings.
-
-## Reorder and edit segments
-
-1. Select **segments** and press **Enter** to open the layout editor.
-2. Use **↑** and **↓** to select an enabled segment. Press **Enter** to pick it up.
-3. Use **↑** and **↓** to move the segment, then press **Enter** to drop it. The preview updates as you move it. Press **Esc** while moving to undo the move.
-4. Press **e** or **→** on an enabled segment to edit its **widget** (when supported), **icon**, and **format** template (`{field}` and optional `[...]` groups). Use **←**/**→** to cycle presets, **Enter** to type a custom icon or template, and **r** to reset to the preset default.
-5. Press **Ctrl+S** to save, or **Esc** to return to settings.
-
-Press **Space** to enable or disable a segment. New segments appear at the end.
-
-## Configure from inside agy
-
-Install the plugin from GitHub.
+### Configure inside `agy` (plugin)
 
 ```sh
 agy plugin install https://github.com/Caph-dev/agy-cli-statusline
+# Or from a local checkout:
+agy plugin install .
 ```
 
-From a local checkout, use `agy plugin install .` instead.
+In `agy`, type `/agy-cli-statusline-setup`, press `Tab` to complete to `/agy-cli-statusline:agy-cli-statusline-setup` (required in agy 1.5.18), and describe the preset or segments you want. Restart `agy` if the footer does not refresh immediately.
 
-Start `agy`. Type `/agy-cli-statusline-setup` and press Tab to accept the completion, then press Enter. You can also submit `/agy-cli-statusline:agy-cli-statusline-setup` directly. agy 1.5.18 requires the full name when submitting an installed plugin skill.
-
-Choose a preset or describe the style and segments you want. The skill runs the bundled installer with those choices. Restart agy if the status line does not update in the current session.
-
-## Use the command in scripts
-
-Run `agy-cli-statusline --help` for supported presets and options. `configure --show` prints the current preferences and installation status. `configure` saves the supplied options and registers the footer. Use `--replace` to replace an existing custom status line. `preview` prints a sample footer.
-
-Both install methods share preferences under `~/.gemini/antigravity-cli/agy-cli-statusline/`. The installer copies the renderer there and sets `statusLine` in `~/.gemini/antigravity-cli/settings.json`. The footer runs from that copy even if npm clears its cache or you remove the agy plugin.
-
-The editor uses sample sessions to show each metric. In agy the footer uses live session data and hides unavailable metrics. Select Unicode or ASCII icons if your terminal does not use a Nerd Font.
-
-## Use CCometixLine presets and palettes
-
-Choose `cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, or `powerline`. The editor includes all 13 CCometixLine palettes and retains the original agy-cli-statusline styles. Existing version 1 `focus` settings use `focus-legacy`.
-
-To preview Dashboard in 256 colors from the checkout, run:
+### Scriptable CLI
 
 ```sh
-node bin/agy-cli-statusline.mjs preview --preset dashboard --color-depth 256
+agy-cli-statusline configure --show
+agy-cli-statusline configure --preset dashboard --color-depth 256
+agy-cli-statusline preview --preset cometix
 ```
 
-Choose `auto`, `truecolor`, `256`, `16`, or `none` for color depth. `auto` checks `COLORTERM` and `TERM`. `zen` defaults to `none`. agy provides model, context, quota, cost, subagent, and cache-token data. The `cache` segment aligns with CCometixLine (showing warm/cold TTL countdown, session cache hit ratio `{hit}% hit`, hit-ratio-only presets `{hit}% hit` and `{hit}%`, optional miss count `{misses}`, last miss cause `{cause}`, estimated rewarm cost `{rewarm}`, and `text` / `bar` / `gauge` widgets — including `cache-aware`'s dots countdown bar), deriving live prompt-cache metrics from the local Antigravity conversation SQLite database (`~/.gemini/antigravity-cli/conversations/*.db`, read-only via `node:sqlite`) when `prompt_cache` is absent and falling back to `context_window.current_usage`. The `tps` (generation speed in `tok/s` with optional `{ttft}` / `{median}`) and `cost.today` (estimated today's API-list spend since local midnight) segments share the same mtime-cached SQLite reader, and `cost` also falls back to the current conversation's estimated spend when agy omits `cost`. The `subagents` segment (adapted from `agy-zh-pack`, enabled by default in `studio` and `signal`, and optional in all presets) renders an aligned multi-line subagent tree (`├` / `└`, up to 4 rows plus `+N more subagents`) showing each subagent's type and role, model, context ring/tokens, cache hit ratio, own estimated cost, and live status (`● elapsed`, `● waiting`, or `✓ done elapsed · N steps`, collapsing completed subagents after 10 seconds), or switches to a single-line `inline` summary widget; it merges `payload.subagents` with local `conversation_summaries.db` and active subagent conversation databases. Presets still skip Claude Code-only metrics such as updates, compaction thresholds, and context history. A quota window appears when agy identifies the bucket as five-hour or weekly.
+Run `agy-cli-statusline --help` for all options, and add `--replace` when replacing an existing custom status line.
 
-See [third-party notices](./THIRD_PARTY_NOTICES.md) for the CCometixLine and agy-zh-pack sources and licenses.
+> Preferences and a self-contained renderer copy live in `~/.gemini/antigravity-cli/agy-cli-statusline/`, so the footer keeps working even if npm's cache is cleared or the plugin is uninstalled. Switch `icons` to `unicode` or `ascii` if your terminal does not use a Nerd Font.
+
+## Segments
+
+| Segment | Description |
+| :--- | :--- |
+| `model` | Active model display name, ID, and reasoning effort. |
+| `dir` | Current workspace directory (`auto`, `name`, `parent`, `tilde`, `short`, or `full`). |
+| `git` | Branch, short HEAD SHA, dirty / ahead / behind markers, and optional changed-file & `+added -deleted` diff stats. |
+| `worktree` | Linked Git worktree name. |
+| `vcs` | Version-control system type (when reported by `agy`). |
+| `context` | Context window usage; defaults to a dynamic proportional ring (`gauge`, turning yellow ≥70% and red ≥90%) and also supports `bar` / `text` widgets and token counts (`% · used/total`). |
+| `cache` | Prompt cache warm/cold TTL countdown, session hit ratio (`{hit}% hit`), misses, miss cause, and estimated rewarm cost; supports `text` / `bar` / `gauge` widgets. |
+| `tps` | Latest call generation speed (`tok/s`), with optional TTFT and per-model median. |
+| `quota` | Summary of reported quota buckets and soonest reset countdown. |
+| `quota.5h` | 5-hour quota window with pace delta (`⇡` / `⇣`), reset countdown, and `pace` / `bar` / `gauge` / `text` widgets. |
+| `quota.7d` | 7-day (weekly) quota window with pace delta (`⇡` / `⇣`), reset countdown, and `pace` / `bar` / `gauge` / `text` widgets. |
+| `quota.eta` | Estimated time until quota runs out at the current burn rate. |
+| `cost` | Current session cost (falls back to estimated spend from local conversation DB when omitted by `agy`). |
+| `cost.today` | Estimated API-list spend since local midnight, plus call / conversation counts. |
+| `state` | Current agent state (e.g. `working`, `editing`, `idle`). |
+| `subagents` | Active and recent subagents as an aligned multi-line `tree` (up to 4 rows with model, context, cache, cost, and live status; completed rows collapse after 10s) or single-line `inline` summary. |
+| `cycle` | Agent cycle mode. |
+| `sandbox` | Sandbox status (`on` / `off`). |
+
+- Live `agy` sessions hide segments without data; the editor uses sample data so you can preview every metric.
+- When `agy` omits fields, `cache`, `tps`, `cost.today`, `cost`, and `subagents` read `~/.gemini/antigravity-cli/conversations/*.db` (read-only via `node:sqlite`).
+
+## Customization & Shortcuts
+
+- **Presets**: CCometixLine (`cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, `powerline`) and built-in (`studio`, `signal`, `compact`, `bracket`, `focus-legacy`).
+- **Themes & appearance**: 13 CCometixLine palettes + 5 built-in themes (`dusk`, `ink`, `paper`, `signal`, `mono`); skins (`powerline`, `plain`, `compact`, `bracket`, `pill`); color depth (`auto`, `truecolor`, `256`, `16`, `none`).
+- **Per-segment editing**: customize each enabled segment's widget, Nerd Font icon preset or custom glyph, and `{field}` / `[...]` format template directly in the layout editor.
+
+| Key | Action |
+| :--- | :--- |
+| `↑` / `↓` (`j` / `k`) | Move between fields or segments |
+| `←` / `→` (`h` / `l`) | Cycle option values |
+| `Enter` / `Space` | Open **segments** layout; inside layout, `Space` toggles a segment and `Enter` picks up / drops to reorder (`Esc` cancels move) |
+| `e` or `→` | Edit an enabled segment's widget, icon, and format template (`r` resets to default) |
+| `Ctrl+S` / `q` | Save / cancel |
+
+## Acknowledgments
+
+- [CCometixLine](https://github.com/Haleclipse/CCometixLine) by Haleclipse — presets, color palettes, ANSI color conversion, and prompt-cache metric design.
+- [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng — local SQLite/protobuf telemetry reader, pricing table, TPS & daily cost estimation, cache-miss detection, and the aligned multi-line subagent tree component.
+
+See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for upstream source commits and MIT license texts.
