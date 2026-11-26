@@ -1,0 +1,44 @@
+# macOS & OS metadata
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# Node.js / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tgz
+.npm/
+.eslintcache
+coverage/
+.nyc_output/
+
+# Local runtime & SQLite artifacts
+telemetry-cache.json
+*.db
+*.db-wal
+*.db-shm
+
+# Environment & local secrets
+.env
+.env.*
+!.env.example
+
+# Editors & IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+*.log
+.cache/

@@ -5,7 +5,7 @@ import { normalizePreferences, PRESETS } from '../lib/preferences.mjs';
 import { renderLine } from '../lib/render.mjs';
 import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
 import { collectSegments } from '../lib/segments.mjs';
-import { renderTemplate, templateUsesField } from '../lib/template.mjs';
+import { renderTemplate, renderTemplateParts, templateUsesField } from '../lib/template.mjs';
 
 test('renderTemplate interpolates fields, drops incomplete groups, and handles escapes', () => {
   assert.equal(renderTemplate('{pct}%[ · {tokens} tokens]', { pct: '42', tokens: '84k' }), '42% · 84k tokens');
@@ -20,6 +20,14 @@ test('renderTemplate interpolates fields, drops incomplete groups, and handles e
   assert.equal(renderTemplate('static', {}), 'static');
   assert.equal(templateUsesField('5h {pct}%[ {pace}]', ['pace', 'arrow']), true);
   assert.equal(templateUsesField('5h {pct}%[ · {left}]', ['pace', 'arrow']), false);
+  assert.deepEqual(
+    renderTemplateParts('5h {pct}%[ {arrow}][ · {left}]', { pct: '38', arrow: '⇡19%', left: '4h01m' }, { arrow: 'bad' }),
+    [
+      { text: '5h 38% ', role: 'text' },
+      { text: '⇡19%', role: 'bad' },
+      { text: ' · 4h01m', role: 'text' },
+    ],
+  );
 });
 
 test('changing a preset context or quota format string changes rendered text without special cases', () => {

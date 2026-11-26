@@ -398,3 +398,52 @@ test('context defaults to a dynamic proportional ring (gauge) with severity colo
   assert.match(renderCtx(75), /\x1b\[33m\u{f0aa3}\x1b\[0m/u);
   assert.match(renderCtx(95), /\x1b\[31m\u{f0aa5}\x1b\[0m/u);
 });
+
+test('quota 5h and 7d pace indicators color red when ahead, green when behind, and muted when on pace', () => {
+  // 5h: 30% used, 25% elapsed -> ⇡5% (bad / crit); 7d: 20% used, 73% elapsed -> ⇣53% (good / ok)
+  const aheadBehind = {
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 0.70, reset_in_seconds: 13_500 },
+      { id: 'gemini-weekly', label: 'weekly', remaining_fraction: 0.80, reset_in_seconds: 163_296 },
+    ],
+  };
+  // tokyo-night truecolor: crit = #f7768e (247;118;142), ok = #9ece6a (158;206;106), muted = #565f89 (86;95;137)
+  const budget = render({ preset: 'budget', colorDepth: 'truecolor' }, aheadBehind, 160);
+  assert.match(budget, /\x1b\[38;2;247;118;142m⇡5%\x1b\[0m/);
+  assert.match(budget, /\x1b\[38;2;158;206;106m⇣53%\x1b\[0m/);
+  // Quota text itself stays in quota color (#ff9e64 -> 255;158;100), separate from pace indicator color
+  assert.match(budget, /\x1b\[38;2;255;158;100m5h 30% \x1b\[0m\x1b\[38;2;247;118;142m⇡5%\x1b\[0m/);
+
+  // On pace (30% used, 30% elapsed -> ±0%) uses muted color
+  const onPace = {
+    quota: [
+      { id: 'gemini-5h', label: '5h', remaining_fraction: 0.70, reset_in_seconds: 12_600 },
+    ],
+  };
+  const onPaceBudget = render({ preset: 'budget', colorDepth: 'truecolor' }, onPace, 160);
+  assert.match(onPaceBudget, /\x1b\[38;2;86;95;137m±0%\x1b\[0m/);
+
+  // Terminal 16-color palette (cometix flat): crit = 16:1 (31), ok = 16:2 (32), muted = 16:8 (90)
+  const terminal = render({ preset: 'cometix', layout: 'flat', segments: ['quota.5h', 'quota.7d'], colorDepth: '16' }, aheadBehind, 160);
+  assert.match(terminal, /\x1b\[31m⇡5%\x1b\[0m/);
+  assert.match(terminal, /\x1b\[32m⇣53%\x1b\[0m/);
+  const terminalEven = render({ preset: 'cometix', layout: 'flat', segments: ['quota.5h'], colorDepth: '16' }, onPace, 160);
+  assert.match(terminalEven, /\x1b\[90m±0%\x1b\[0m/);
+
+  // Custom {pace} template also inherits pace coloring
+  const signedPace = render(
+    { preset: 'budget', colorDepth: 'truecolor', items: { 'quota.5h': { format: '5h {pct}% {pace}' }, 'quota.7d': { format: '7d {pct}% {pace}' } } },
+    aheadBehind,
+    160,
+  );
+  assert.match(signedPace, /\x1b\[38;2;247;118;142m\+5%\x1b\[0m/);
+  assert.match(signedPace, /\x1b\[38;2;158;206;106m-53%\x1b\[0m/);
+
+  // Dark filled powerline segment keeps high-contrast red/green on #24283b (36;40;59)
+  const powerline = render({ preset: 'powerline', quotaPace: 'show', colorDepth: 'truecolor' }, aheadBehind, 160);
+  assert.match(powerline, /\x1b\[38;2;247;118;142;48;2;36;40;59m⇡5%\x1b\[0m/);
+
+  // Bright solid pill (catppuccin-mocha quota #fab387 -> 250;179;135) keeps readable dark ink (#111111 -> 17;17;17)
+  const dashboard = render({ preset: 'dashboard', colorDepth: 'truecolor' }, aheadBehind, 160);
+  assert.match(dashboard, /\x1b\[38;2;17;17;17;48;2;250;179;135m⇡5%\x1b\[0m/);
+});
