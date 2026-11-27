@@ -6,10 +6,11 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { clipAnsi, fitAnsi, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
-import { runEditor } from '../lib/editor.mjs';
+import { confirmReplace, runEditor, selectLanguage } from '../lib/editor.mjs';
 import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
 import { PresetLibrary, applyPreset, isPresetInUse, matchesPreset, slugifyPresetName } from '../lib/presets-library.mjs';
 import { PreviewController } from '../lib/tui-preview.mjs';
+import { formatHints, styleKey } from '../lib/tui-ui.mjs';
 
 function terminal(columns = 120, rows = 34) {
   const stdin = new PassThrough();
@@ -392,4 +393,101 @@ test('applyPreset and matchesPreset accurately track full, layout-only, and styl
   const allApplied = applyPreset(layoutOnly, dashboard, 'all');
   assert.equal(isPresetInUse(allApplied, dashboard), true);
   assert.equal(matchesPreset(allApplied, dashboard), true);
+});
+
+test('semantic colored key hints and rounded sub-panels render cleanly across Layout, Item, Style, and startup prompts', async () => {
+  // Verify distinct semantic ANSI colors on key hints
+  assert.match(styleKey('enter'), /\x1b\[1;32menter\x1b\[0m/);
+  assert.match(styleKey('←→'), /\x1b\[1;36m←→\x1b\[0m/);
+  assert.match(styleKey('L'), /\x1b\[1;33mL\x1b\[0m/);
+  assert.match(styleKey('S'), /\x1b\[1;35mS\x1b\[0m/);
+  assert.match(styleKey('^P'), /\x1b\[1;94m\^P\x1b\[0m/);
+  assert.match(styleKey('q'), /\x1b\[1;31mq\x1b\[0m/);
+
+  const hints = formatHints([['enter', 'apply'], ['L', 'layout'], ['S', 'style']], [['^S', 'save'], ['q', 'quit']], 100);
+  assert.match(hints, /\x1b\[1;32menter\x1b\[0m/);
+  assert.match(hints, /\x1b\[1;33mL\x1b\[0m/);
+  assert.match(hints, /\x1b\[1;35mS\x1b\[0m/);
+  assert.match(hints, /\x1b\[1;31mq\x1b\[0m/);
+
+  // Startup language selector and confirmReplace render inside centered rounded boxes
+  const langIo = terminal(80, 24);
+  const langPromise = selectLanguage(langIo);
+  const langPlain = frameText(langIo.stdout);
+  assert.match(langPlain, /╭─.*agy-statusline/);
+  assert.match(langPlain, /Language \/ 选择语言/);
+  assert.match(langPlain, /╰─+╯/);
+  assert.match(rawFrame(langIo.stdout), /\x1b\[1;32mEnter\x1b\[0m/);
+  press(langIo.stdin, undefined, { name: 'escape' });
+  await langPromise;
+
+  const repIo = terminal(80, 24);
+  const repPromise = confirmReplace({ ...repIo, command: 'node /custom/status.mjs', language: 'zh' });
+  const repPlain = frameText(repIo.stdout);
+  assert.match(repPlain, /╭─.*替换当前状态栏/);
+  assert.match(repPlain, /node \/custom\/status\.mjs/);
+  assert.match(rawFrame(repIo.stdout), /\x1b\[1;32my\x1b\[0m/);
+  assert.match(rawFrame(repIo.stdout), /\x1b\[1;31mn\x1b\[0m/);
+  press(repIo.stdin, undefined, { name: 'escape' });
+  await repPromise;
+
+  // Sub-panels across Layout, Item, Style on wide (120x34) and compact (70x24) terminals
+  for (const [cols, rows, language, expectTwoPanels] of [
+    [120, 34, 'en', true],
+    [120, 34, 'zh', true],
+    [70, 24, 'en', false],
+  ]) {
+    const { stdin, stdout } = terminal(cols, rows);
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'dashboard' }),
+      stdin,
+      stdout,
+      language,
+      onSave: async () => {},
+    });
+
+    // Layout page
+    press(stdin, undefined, { name: 'right' });
+    press(stdin, undefined, { name: 'down' });
+    const layoutText = frameText(stdout);
+    assert.match(layoutText, /╭─/);
+    assert.match(layoutText, /╰─/);
+    if (expectTwoPanels) {
+      assert.match(layoutText, language === 'zh' ? /当前区块/ : /Selected/);
+      assert.match(layoutText, language === 'zh' ? /快捷键/ : /Shortcuts/);
+    }
+    for (const line of layoutText.split('\n')) {
+      assert.ok(visibleWidth(line) <= cols, `layout overflow at ${cols}x${rows}: ${line}`);
+    }
+
+    // Item Editor (Context)
+    for (let i = 0; i < 4; i += 1) press(stdin, undefined, { name: 'down' });
+    press(stdin, 'e', { name: 'e' });
+    const itemText = frameText(stdout);
+    assert.match(itemText, /╭─/);
+    if (expectTwoPanels) {
+      assert.match(itemText, language === 'zh' ? /可用字段/ : /Available fields/);
+    }
+    for (const line of itemText.split('\n')) {
+      assert.ok(visibleWidth(line) <= cols, `item overflow at ${cols}x${rows}: ${line}`);
+    }
+    press(stdin, undefined, { name: 'escape' });
+
+    // Style page
+    press(stdin, undefined, { name: 'escape' });
+    press(stdin, undefined, { name: 'right' });
+    press(stdin, undefined, { name: 'down' });
+    const styleText = frameText(stdout);
+    assert.match(styleText, /╭─/);
+    if (expectTwoPanels) {
+      assert.match(styleText, language === 'zh' ? /配色板 · catppuccin-mocha/ : /Palette · catppuccin-mocha/);
+      assert.match(styleText, language === 'zh' ? /皮肤样式/ : /Skins/);
+    }
+    for (const line of styleText.split('\n')) {
+      assert.ok(visibleWidth(line) <= cols, `style overflow at ${cols}x${rows}: ${line}`);
+    }
+
+    press(stdin, 'q', { name: 'q' });
+    await result;
+  }
 });
