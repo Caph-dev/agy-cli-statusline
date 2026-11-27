@@ -2,6 +2,7 @@
   "name": "agy-cli-statusline",
   "version": "1.0.0",
   "description": "A customizable status line and live-preview terminal editor for Antigravity CLI.",
+  "author": "Caph-dev",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,7 +22,8 @@
   "os": ["darwin", "linux"],
   "scripts": {
     "test": "node --test",
-    "validate:plugin": "agy plugin validate --strict ."
+    "validate:plugin": "agy plugin validate --strict .",
+    "prepublishOnly": "npm test"
   },
   "keywords": ["antigravity", "agy", "statusline", "terminal"]
 }
