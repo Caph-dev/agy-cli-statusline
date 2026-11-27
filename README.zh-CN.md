@@ -65,7 +65,7 @@ agy-cli-statusline preview --preset cometix
 
 | 组件 ID | 名称 | 简介 |
 | :--- | :--- | :--- |
-| `model` | 模型 | 显示当前模型名称、ID 与推理强度。 |
+| `model` | 模型 | 显示当前模型名称、ID 与推理强度（Orchestrator 模式下实时追踪 Planner / Executor 切换，并提供多种显示格式预设）。 |
 | `dir` | 目录 | 工作区目录路径，支持 `auto`、`name`、`parent`、`tilde`、`short`、`full` 样式。 |
 | `git` | Git | 分支、短 HEAD SHA、脏状态与领先/落后提交数，支持可选改动文件数与 `+新增 -删除` 行数统计。 |
 | `worktree` | 工作树 | 关联的 Git worktree 名称。 |
@@ -85,7 +85,7 @@ agy-cli-statusline preview --preset cometix
 | `sandbox` | 沙箱 | 沙箱启用状态（`on` / `off`）。 |
 
 - 编辑器使用示例数据预览全部指标；在 `agy` 实时会话中，没有数据的组件会自动隐藏。
-- 当 `agy` 未直接提供对应字段时，`cache`、`tps`、`cost.today`、`cost` 与 `subagents` 会通过只读 `node:sqlite` 读取 `~/.gemini/antigravity-cli/conversations/*.db` 进行计算。
+- 当 `agy` 未直接提供对应字段时，`model`（Orchestrator 阶段）、`cache`、`tps`、`cost.today`、`cost` 与 `subagents` 会通过只读 `node:sqlite` 读取 `~/.gemini/antigravity-cli/conversations/*.db` 进行计算。
 
 ## 自定义与快捷键
 

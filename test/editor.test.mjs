@@ -749,3 +749,50 @@ test('the layout panel shows tree bottom tag for subagents in tree mode and hide
   press(stdin, 'q', { name: 'q' });
   assert.equal((await result).saved, false);
 });
+
+test('the model block editor previews Planner/Executor states, cycles orchestrator format presets, and saves', async () => {
+  for (const [language, heading, planLabel, execLabel] of [
+    ['en', /Edit segment: Model/, 'Plan:', 'Exec:'],
+    ['zh', /编辑区块：模型/, '规划阶段：', '执行阶段：'],
+  ]) {
+    const { stdin, stdout } = terminal();
+    stdout.columns = 120;
+    stdout.rows = 32;
+    const frames = [];
+    stdout.write = (frame) => { frames.push(String(frame)); stdout.frames = frames; return true; };
+    let saved;
+    const result = runEditor({
+      preferences: normalizePreferences({ preset: 'cometix', segments: ['model', 'context'] }),
+      stdin,
+      stdout,
+      language,
+      onSave: async (preferences) => { saved = preferences; },
+    });
+
+    openLayoutTab(stdin);
+    press(stdin, 'e', { name: 'e' });
+    const initial = frameText(stdout);
+    assert.match(initial, heading);
+    assert.ok(initial.includes(planLabel));
+    assert.ok(initial.includes(execLabel));
+    assert.match(initial, /Orchestrator \(Neon\)/);
+    assert.match(initial, /Executor \(Hydrogen\)/);
+
+    // Move to format (down from icon) and cycle presets with →
+    press(stdin, undefined, { name: 'down' });
+    press(stdin, undefined, { name: 'right' });
+    assert.match(frameText(stdout), /Orchestrator \(Neon\) → Hydrogen/);
+
+    press(stdin, undefined, { name: 'right' });
+    assert.match(frameText(stdout), /Planner \(Neon\)/);
+    assert.match(frameText(stdout), /Executor \(Hydrogen\)/);
+
+    press(stdin, undefined, { name: 'right' });
+    assert.match(frameText(stdout), /Planner · Gemini 4 Neon \(XHigh\)/);
+    assert.match(frameText(stdout), /Executor · Gemini 4 Hydrogen \(XHigh\)/);
+
+    press(stdin, 's', { name: 's', ctrl: true });
+    assert.equal((await result).saved, true);
+    assert.equal(saved.items.model.format, '[{phase} · ]{active}[ {effort}]');
+  }
+});

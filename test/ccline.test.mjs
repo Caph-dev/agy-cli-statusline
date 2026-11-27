@@ -13,7 +13,7 @@ import {
   seedCustomLayout,
 } from '../lib/preferences.mjs';
 import { gaugeIcon, renderLine } from '../lib/render.mjs';
-import { SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
+import { orchestratorSamplePayload, SAMPLE_GIT, samplePayload } from '../lib/sample.mjs';
 import { collectSegments } from '../lib/segments.mjs';
 
 function render(options, payload = samplePayload(), width = 120) {
@@ -715,4 +715,136 @@ test('custom multi-row layout works across built-in and upstream presets and val
   assert.throws(() => parseSegmentsAndLayout('model / model'), /empty row/);
   assert.throws(() => parseSegmentsAndLayout('model | dir | cost'), /at most one '\|'/);
   assert.throws(() => parseSegmentsAndLayout('model / nope'), /unknown segment/);
+});
+
+test('context segment includes prompt cache read and creation tokens in used tokens, remaining tokens, and fallback percent', () => {
+  const cachedPayload = {
+    context_window: {
+      used_percentage: 41,
+      current_usage: {
+        input_tokens: 5_313,
+        output_tokens: 1_635,
+        cache_read_input_tokens: 426_551,
+        cache_creation_input_tokens: 0,
+      },
+      context_window_size: 1_048_576,
+    },
+  };
+  const ratioPrefs = normalizePreferences({
+    preset: 'cometix',
+    icons: 'none',
+    segments: ['context'],
+    items: { context: { widget: 'text', format: '{pct}% · {tokens}/{window} · {left} left' } },
+  });
+  const ratioOut = stripAnsi(renderLine(collectSegments(cachedPayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(ratioOut, '41% · 433.5k/1M · 615.1k left');
+
+  // When used_percentage is omitted, fallback percentage also sums cache_read + cache_creation + input + output
+  const fallbackPayload = {
+    context_window: {
+      current_usage: {
+        input_tokens: 5_000,
+        output_tokens: 2_000,
+        cache_read_input_tokens: 393_000,
+        cache_creation_input_tokens: 10_000,
+      },
+      context_window_size: 1_000_000,
+    },
+  };
+  const fallbackOut = stripAnsi(renderLine(collectSegments(fallbackPayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(fallbackOut, '41% · 410k/1M · 590k left');
+
+  // Cache-read-only current_usage still reports tokens
+  const readOnlyPayload = {
+    context_window: {
+      current_usage: { cache_read_input_tokens: 50_000 },
+      context_window_size: 200_000,
+    },
+  };
+  const readOnlyOut = stripAnsi(renderLine(collectSegments(readOnlyPayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(readOnlyOut, '25% · 50k/200k · 150k left');
+});
+
+test('model format presets render regular models, Orchestrator Planner/Executor states, unknown fallbacks, and ASCII arrows', () => {
+  const renderModel = (payload, format, extra = {}) => {
+    const prefs = normalizePreferences({
+      preset: 'cometix',
+      icons: 'none',
+      segments: ['model'],
+      ...(format != null ? { items: { model: { format } } } : {}),
+      ...extra,
+    });
+    return stripAnsi(renderLine(collectSegments(payload, prefs), prefs, { width: 120, env: {} }));
+  };
+
+  const regular = { model: { id: 'gemini-2.5-pro', display_name: 'Gemini 2.5 Pro', effort: 'high' } };
+  const planner = orchestratorSamplePayload('planner');
+  const executor = orchestratorSamplePayload('executor');
+  const unknownExec = {
+    model: { id: 'orchestrator-neon', display_name: 'Orchestrator (Neon)' },
+    orchestrator: { phase: 'executor', activeModel: '', activeId: '', plannerModel: 'Gemini 4 Neon (XHigh)', executorModel: '' },
+  };
+
+  const expectedRegular = [
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro high',
+    'Gemini 2.5 Pro',
+    'Gemini',
+    'gemini-2.5-pro',
+  ];
+  const expectedPlanner = [
+    'Orchestrator (Neon)',
+    'Orchestrator (Neon)',
+    'Planner (Neon)',
+    'Planner · Gemini 4 Neon (XHigh)',
+    'Plan: Gemini 4 Neon (XHigh)',
+    'Gemini 4 Neon (XHigh) (Plan)',
+    'Gemini 4 Neon (XHigh)',
+    'Orchestrator (Neon)',
+    'Orchestrator (Neon)',
+    'Orchestrator',
+    'orchestrator-neon',
+  ];
+  const expectedExecutor = [
+    'Executor (Hydrogen)',
+    'Orchestrator (Neon) → Hydrogen',
+    'Executor (Hydrogen)',
+    'Executor · Gemini 4 Hydrogen (XHigh)',
+    'Exec: Gemini 4 Hydrogen (XHigh)',
+    'Gemini 4 Hydrogen (XHigh) (Exec)',
+    'Gemini 4 Hydrogen (XHigh)',
+    'Orchestrator (Neon)',
+    'Executor (Hydrogen)',
+    'Orchestrator',
+    'gemini-4-hydrogen',
+  ];
+
+  assert.equal(ITEM_FORMAT_PRESETS.model.length, expectedRegular.length);
+  ITEM_FORMAT_PRESETS.model.forEach((fmt, idx) => {
+    assert.equal(renderModel(regular, fmt), expectedRegular[idx], `regular[${idx}]: ${fmt}`);
+    assert.equal(renderModel(planner, fmt), expectedPlanner[idx], `planner[${idx}]: ${fmt}`);
+    assert.equal(renderModel(executor, fmt), expectedExecutor[idx], `executor[${idx}]: ${fmt}`);
+  });
+
+  // Unknown executor model falls back cleanly to Executor without stale Planner model
+  assert.equal(renderModel(unknownExec, ITEM_FORMAT_PRESETS.model[0]), 'Executor');
+  assert.equal(renderModel(unknownExec, ITEM_FORMAT_PRESETS.model[1]), 'Orchestrator (Neon) → Executor');
+
+  // ASCII mode converts → to ->
+  const asciiOut = renderModel(executor, ITEM_FORMAT_PRESETS.model[1], { icons: 'ascii' });
+  assert.equal(asciiOut, 'Orchestrator (Neon) -> Hydrogen');
+  assert.match(asciiOut, /^[\x20-\x7e]+$/);
+
+  // Orchestrator payload effort is suppressed when active model already ends with effort level
+  const withEffort = {
+    model: { id: 'orchestrator-neon', display_name: 'Orchestrator (Neon)', effort: 'xhigh' },
+    orchestrator: executor.orchestrator,
+  };
+  assert.equal(renderModel(withEffort, '{name}[ {effort}]'), 'Executor (Hydrogen)');
 });

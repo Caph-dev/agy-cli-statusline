@@ -65,7 +65,7 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 
 | Segment | Description |
 | :--- | :--- |
-| `model` | Active model display name, ID, and reasoning effort. |
+| `model` | Active model display name, ID, and reasoning effort (automatically tracks Orchestrator Planner/Executor switches with selectable format presets). |
 | `dir` | Current workspace directory (`auto`, `name`, `parent`, `tilde`, `short`, or `full`). |
 | `git` | Branch, short HEAD SHA, dirty / ahead / behind markers, and optional changed-file & `+added -deleted` diff stats. |
 | `worktree` | Linked Git worktree name. |
@@ -85,7 +85,7 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 | `sandbox` | Sandbox status (`on` / `off`). |
 
 - Live `agy` sessions hide segments without data; the editor uses sample data so you can preview every metric.
-- When `agy` omits fields, `cache`, `tps`, `cost.today`, `cost`, and `subagents` read `~/.gemini/antigravity-cli/conversations/*.db` (read-only via `node:sqlite`).
+- When `agy` omits fields, `model` (Orchestrator phase), `cache`, `tps`, `cost.today`, `cost`, and `subagents` read `~/.gemini/antigravity-cli/conversations/*.db` (read-only via `node:sqlite`).
 
 ## Customization & Shortcuts
 

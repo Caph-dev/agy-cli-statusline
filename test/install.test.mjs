@@ -395,3 +395,69 @@ test('configure supports multi-row --segments with / and | and --layout on built
   assert.equal(previewOut.length, 2);
   assert.equal(existsSync(preview.settingsPath), false);
 });
+
+test('installed renderer fixes cached context token counts and tracks live Orchestrator Executor switches', t => {
+  const f = fixture(t, {
+    model: 'Orchestrator (Neon)',
+    orchestrator: {
+      planner: 'Gemini 4 Neon (XHigh)',
+      executor: 'Gemini 4 Hydrogen (XHigh)',
+    },
+  });
+  succeeded(f.run('configure', '--preset', 'cometix', '--icons', 'none', '--segments', 'model,context'));
+  const prefsPath = join(f.directory, 'agy-cli-statusline', 'statusline.json');
+  const prefs = JSON.parse(readFileSync(prefsPath, 'utf8'));
+  prefs.items = { context: { widget: 'text', format: '{pct}% · {tokens}/{window}' } };
+  writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+
+  const convId = 'cccccccc-dddd-eeee-ffff-111111111111';
+  const convDir = join(f.directory, 'conversations');
+  mkdirSync(convDir, { recursive: true });
+  const db = new DatabaseSync(join(convDir, `${convId}.db`));
+  db.exec('create table steps (idx integer, step_type integer, status integer, metadata blob, step_payload blob); create table gen_metadata (data blob);');
+  const varint = (n) => {
+    const out = [];
+    let v = n;
+    do { let b = v % 128; v = Math.floor(v / 128); if (v) b |= 0x80; out.push(b); } while (v);
+    return Buffer.from(out);
+  };
+  const fv = (field, n) => Buffer.concat([varint(field * 8), varint(n)]);
+  const fb = (field, v) => {
+    const buf = Buffer.isBuffer(v) ? v : Buffer.from(String(v), 'utf8');
+    return Buffer.concat([varint(field * 8 + 2), varint(buf.length), buf]);
+  };
+  const nowSec = Math.floor(Date.now() / 1000);
+  const stepMeta = (sec, tool = '') => Buffer.concat([fb(1, fv(1, sec)), ...(tool ? [fb(4, fb(2, tool))] : [])]);
+  db.prepare('insert into steps values (?, ?, ?, ?, ?)').run(0, 14, 3, stepMeta(nowSec - 30), null);
+  db.prepare('insert into steps values (?, ?, ?, ?, ?)').run(1, 15, 3, stepMeta(nowSec - 29), null);
+  const u1 = Buffer.concat([fv(2, 5_000), fv(3, 200), fb(11, 'req-plan-1')]);
+  const cm1 = Buffer.concat([fb(4, u1), fb(19, 'gemini-4-neon'), fb(21, 'Gemini 4 Neon (XHigh)')]);
+  db.prepare('insert into gen_metadata values (?)').run(Buffer.concat([fb(1, cm1), fb(2, varint(1))]));
+  // exit_plan_mode triggers immediate switch to Executor (Hydrogen)
+  db.prepare('insert into steps values (?, ?, ?, ?, ?)').run(2, 132, 3, stepMeta(nowSec - 5, 'exit_plan_mode'), null);
+  db.close();
+
+  const payload = {
+    conversation_id: convId,
+    model: { id: 'orchestrator-neon', display_name: 'Orchestrator (Neon)' },
+    context_window: {
+      used_percentage: 41,
+      current_usage: {
+        input_tokens: 5_313,
+        output_tokens: 1_635,
+        cache_read_input_tokens: 426_551,
+        cache_creation_input_tokens: 0,
+      },
+      context_window_size: 1_048_576,
+    },
+    terminal_width: 120,
+  };
+
+  const defaultOut = succeeded(f.render(payload)).trim();
+  assert.match(defaultOut, /^Executor \(Hydrogen\) \| 41% · 433\.5k\/1M$/);
+
+  prefs.items.model = { format: '{base}[ → {exec}][ {effort}]' };
+  writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+  const arrowOut = succeeded(f.render(payload)).trim();
+  assert.match(arrowOut, /^Orchestrator \(Neon\) → Hydrogen \| 41% · 433\.5k\/1M$/);
+});

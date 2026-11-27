@@ -21,6 +21,7 @@ import {
   priceFor,
   quantile,
   readConversationDb,
+  readOrchestratorState,
   readTelemetry,
   SPEED_MIN_SAMPLES,
   speedTier,
@@ -475,4 +476,139 @@ test('readTelemetry discovers nested subagents from conversation_summaries.db an
   assert.equal(lines.length, 2);
   assert.match(lines[0], /^ ├ .*research · Codebase Reviewer.*Gemini 4 Neon \(High\).*50% · 100k.*90% hit.*● 1m05s$/);
   assert.match(lines[1], /^ └ .*explore · Dependency Audit.*Gemini 4 Hydrogen.*50k.*80% hit.*✓ done 1m40s · 9 steps$/);
+});
+
+test('readOrchestratorState and readTelemetry track Planner/Executor transitions in real time with settings and DB fallbacks', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-orch-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const convDir = join(root, 'conversations');
+  mkdirSync(convDir, { recursive: true });
+  const convId = 'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb';
+  const dbPath = join(convDir, `${convId}.db`);
+
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(join(root, 'settings.json'), JSON.stringify({
+    model: 'Orchestrator (Neon)',
+    orchestrator: {
+      planner: 'Gemini 4 Neon (XHigh)',
+      executor: 'Gemini 4 Hydrogen (XHigh)',
+    },
+  }));
+
+  const db = new DatabaseSync(dbPath);
+  db.exec('create table steps (idx integer, step_type integer, status integer, metadata blob, step_payload blob); create table gen_metadata (data blob);');
+  const insStep = db.prepare('insert into steps values (?, ?, ?, ?, ?)');
+  const insGen = db.prepare('insert into gen_metadata values (?)');
+  const nowSec = Math.floor(Date.now() / 1000);
+  const stepMeta = (sec, tool = '') => Buffer.concat([
+    fb(1, fv(1, sec)),
+    ...(tool ? [fb(4, fb(2, tool))] : []),
+  ]);
+  const addGen = (steps, model, disp, rid) => {
+    const cm = Buffer.concat([
+      fb(4, usageBlob({ inp: 1000, out: 100, rid })),
+      fb(19, model),
+      fb(21, disp),
+    ]);
+    insGen.run(Buffer.concat([fb(1, cm), packed(2, steps)]));
+  };
+
+  // 1. Initial user input + Planner call (Neon)
+  insStep.run(0, 14, 3, stepMeta(nowSec - 120), null);
+  insStep.run(1, 15, 3, stepMeta(nowSec - 119), null);
+  addGen([1], 'gemini-4-neon', 'Gemini 4 Neon (XHigh)', 'r1');
+  let state = readOrchestratorState(DatabaseSync, dbPath, {
+    configuredPlanner: 'Gemini 4 Neon (XHigh)',
+    configuredExecutor: 'Gemini 4 Hydrogen (XHigh)',
+    mainModel: 'Orchestrator (Neon)',
+  });
+  assert.equal(state.phase, 'planner');
+  assert.equal(state.activeModel, 'Gemini 4 Neon (XHigh)');
+  assert.equal(state.activeId, 'gemini-4-neon');
+
+  // 2. Errored exit_plan_mode (status = 7) must NOT switch to executor
+  insStep.run(2, 132, 7, stepMeta(nowSec - 110, 'exit_plan_mode'), null);
+  state = readOrchestratorState(DatabaseSync, dbPath, {
+    configuredPlanner: 'Gemini 4 Neon (XHigh)',
+    configuredExecutor: 'Gemini 4 Hydrogen (XHigh)',
+    mainModel: 'Orchestrator (Neon)',
+  });
+  assert.equal(state.phase, 'planner');
+
+  // 3. Valid exit_plan_mode (step 3) BEFORE executor gen_metadata arrives -> immediate executor via settings fallback
+  insStep.run(3, 132, 3, stepMeta(nowSec - 100, 'exit_plan_mode'), null);
+  state = readOrchestratorState(DatabaseSync, dbPath, {
+    configuredPlanner: 'Gemini 4 Neon (XHigh)',
+    configuredExecutor: 'Gemini 4 Hydrogen (XHigh)',
+    mainModel: 'Orchestrator (Neon)',
+  });
+  assert.equal(state.phase, 'executor');
+  assert.equal(state.activeModel, 'Gemini 4 Hydrogen (XHigh)');
+
+  // 4. Executor gen_metadata written -> live model & id read from DB
+  insStep.run(4, 15, 3, stepMeta(nowSec - 90), null);
+  addGen([4], 'gemini-4-hydrogen', 'Gemini 4 Hydrogen (XHigh)', 'r2');
+  const telExec = await readTelemetry({
+    conversationId: convId,
+    needOrchestrator: true,
+    mainModel: 'orchestrator-neon Orchestrator (Neon)',
+    root,
+    convDirs: [convDir],
+    cacheFile: null,
+  });
+  assert.equal(telExec.orchestrator.phase, 'executor');
+  assert.equal(telExec.orchestrator.activeModel, 'Gemini 4 Hydrogen (XHigh)');
+  assert.equal(telExec.orchestrator.activeId, 'gemini-4-hydrogen');
+
+  // 5. [plan review] SYSTEM_MESSAGE (step_type 101) switches immediately back to planner before planner gen_metadata
+  insStep.run(5, 101, 3, stepMeta(nowSec - 80), Buffer.from('...[plan review due]...', 'utf8'));
+  state = readOrchestratorState(DatabaseSync, dbPath, {
+    configuredPlanner: 'Gemini 4 Neon (XHigh)',
+    configuredExecutor: 'Gemini 4 Hydrogen (XHigh)',
+    mainModel: 'Orchestrator (Neon)',
+  });
+  assert.equal(state.phase, 'planner');
+  assert.equal(state.activeModel, 'Gemini 4 Neon (XHigh)');
+
+  // 6. Second exit_plan_mode -> executor, then USER_INPUT (step_type 14) -> planner
+  insStep.run(6, 132, 3, stepMeta(nowSec - 70, 'exit_plan_mode'), null);
+  insStep.run(7, 15, 3, stepMeta(nowSec - 65), null);
+  addGen([7], 'gemini-4-hydrogen', 'Gemini 4 Hydrogen (XHigh)', 'r3');
+  insStep.run(8, 14, 3, stepMeta(nowSec - 50), null);
+  const telPlan = await readTelemetry({
+    conversationId: convId,
+    needOrchestrator: true,
+    mainModel: 'orchestrator-neon Orchestrator (Neon)',
+    root,
+    convDirs: [convDir],
+    cacheFile: null,
+  });
+  assert.equal(telPlan.orchestrator.phase, 'planner');
+  assert.equal(telPlan.orchestrator.activeModel, 'Gemini 4 Neon (XHigh)');
+  assert.equal(telPlan.orchestrator.executorModel, 'Gemini 4 Hydrogen (XHigh)');
+  db.close();
+
+  // 7. Fallback detection when DB has no step_type / exit_plan_mode columns
+  const fallbackConvId = 'bbbbbbbb-1111-2222-3333-cccccccccccc';
+  const fallbackDb = join(convDir, `${fallbackConvId}.db`);
+  writeConvDb(fallbackDb, {
+    steps: [{ idx: 1, sec: nowSec - 10 }],
+    gens: [{ steps: [1], model: 'gemini-4-hydrogen', disp: 'Gemini 4 Hydrogen (XHigh)', usage: { inp: 100, out: 10, rid: 'fb1' } }],
+  });
+  const fbState = readOrchestratorState(DatabaseSync, fallbackDb, {
+    mainModel: 'Orchestrator (Neon)',
+  });
+  assert.equal(fbState.phase, 'executor');
+  assert.equal(fbState.activeModel, 'Gemini 4 Hydrogen (XHigh)');
+
+  // 8. needOrchestrator: false skips lookup
+  const skipped = await readTelemetry({
+    conversationId: convId,
+    needTps: true,
+    needOrchestrator: false,
+    root,
+    convDirs: [convDir],
+    cacheFile: null,
+  });
+  assert.equal(skipped.orchestrator, null);
 });

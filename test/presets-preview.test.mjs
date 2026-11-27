@@ -491,3 +491,25 @@ test('semantic colored key hints and rounded sub-panels render cleanly across La
     await result;
   }
 });
+
+test('orchestrator preview scenario shows live Executor model and cache-inclusive context tokens', async () => {
+  const { stdin, stdout } = terminal(118, 34);
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix' }),
+    stdin,
+    stdout,
+    onSave: async () => {},
+  });
+
+  press(stdin, 'p', { name: 'p', ctrl: true });
+  for (const ch of 'orchestrator') press(stdin, ch, {});
+  press(stdin, '\r', { name: 'return' });
+
+  const text = frameText(stdout);
+  assert.match(text, /scenario ‹orchestrator›/);
+  assert.match(text, /Executor \(Hydrogen\)/);
+  assert.match(text, /41% · 433\.5k tokens/);
+
+  press(stdin, 'q', { name: 'q' });
+  await result;
+});
