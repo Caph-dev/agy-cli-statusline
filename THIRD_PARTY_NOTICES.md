@@ -1,6 +1,6 @@
 # Third-party notices
 
-The preset, palette, ANSI color conversion, and prompt-cache metric design (countdown/cold semantics, template fields, and fallback Claude input pricing) in this project are adapted from [CCometixLine 2.0.1](https://github.com/Haleclipse/CCometixLine/tree/1749ff85b52d8d10e67e0a04d247ceab768f380f). Its [package manifest](https://github.com/Haleclipse/CCometixLine/blob/1749ff85b52d8d10e67e0a04d247ceab768f380f/Cargo.toml) identifies Haleclipse as the author and declares the MIT license.
+The preset, palette, ANSI color conversion, prompt-cache metric design (countdown/cold semantics, template fields, and fallback Claude input pricing), and TUI preset gallery / live-preview bar design in this project are adapted from [CCometixLine](https://github.com/Haleclipse/CCometixLine) (MIT License; originally anchored at [commit 1749ff8](https://github.com/Haleclipse/CCometixLine/tree/1749ff85b52d8d10e67e0a04d247ceab768f380f) and updated against upstream `master`). Its [package manifest](https://github.com/Haleclipse/CCometixLine/blob/1749ff85b52d8d10e67e0a04d247ceab768f380f/Cargo.toml) identifies Haleclipse as the author and declares the MIT license.
 
 ## MIT License
 

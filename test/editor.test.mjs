@@ -61,6 +61,17 @@ function press(stdin, text, key) {
   stdin.emit('keypress', text, key);
 }
 
+function openLayoutTab(stdin) {
+  press(stdin, undefined, { name: 'right' });
+  press(stdin, undefined, { name: 'down' });
+}
+
+function openStyleTab(stdin) {
+  press(stdin, undefined, { name: 'right' });
+  press(stdin, undefined, { name: 'right' });
+  press(stdin, undefined, { name: 'down' });
+}
+
 test('the startup prompts handle Enter and Esc', async () => {
   const zh = terminal();
   zh.stdout.write = () => true;
@@ -96,8 +107,7 @@ test('the layout panel grabs, moves, and restores one segment without wrapping',
     stdin, stdout,
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   assert.match(frameText(stdout), /Segment layout/);
   assert.match(frameText(stdout), /Cost\s+enabled\s+row 1 right/);
   for (let step = 0; step < 3; step += 1) press(stdin, undefined, { name: 'down' });
@@ -145,11 +155,12 @@ test('the editor configures the context format and updates the live preview', as
       stdin, stdout, language,
       onSave: async (preferences) => { saved = preferences; },
     });
-    for (let step = 0; step < 5; step += 1) press(stdin, undefined, { name: 'down' });
+    openStyleTab(stdin);
+    for (let step = 0; step < 4; step += 1) press(stdin, undefined, { name: 'down' });
     press(stdin, undefined, { name: 'left' });
     assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.match(frameText(stdout), /42% · 84k\/200k/);
-    press(stdin, '\r', { name: 'return' });
+    press(stdin, 's', { name: 's', ctrl: true });
     assert.equal((await result).saved, true);
     assert.equal(saved.contextFormat, 'ratio');
     assert.equal(stdin.isRaw, false);
@@ -174,13 +185,14 @@ test('the editor toggles 5h and 7d quota pace estimates in the live preview', as
     });
     assert.match(frameText(stdout), /5h 38% ⇡19%/);
     assert.match(frameText(stdout), /7d 82% ⇡27%/);
-    for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
+    openStyleTab(stdin);
+    for (let step = 0; step < 5; step += 1) press(stdin, undefined, { name: 'down' });
     press(stdin, undefined, { name: 'left' });
     assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${hideLabel}`));
     assert.match(frameText(stdout), /5h 38%/);
     assert.match(frameText(stdout), /7d 82%/);
     assert.doesNotMatch(frameText(stdout), /⇡19%|⇡27%/);
-    press(stdin, '\r', { name: 'return' });
+    press(stdin, 's', { name: 's', ctrl: true });
     assert.equal((await result).saved, true);
     assert.equal(saved.quotaPace, 'hide');
     assert.equal(stdin.isRaw, false);
@@ -196,12 +208,13 @@ test('the editor toggles 5h and 7d quota pace estimates in the live preview', as
       stdin: pwr.stdin, stdout: pwr.stdout, language,
       onSave: async (preferences) => { pwrSaved = preferences; },
     });
+    openStyleTab(pwr.stdin);
     assert.doesNotMatch(frameText(pwr.stdout), /⇡19%/);
-    for (let step = 0; step < 6; step += 1) press(pwr.stdin, undefined, { name: 'down' });
+    for (let step = 0; step < 5; step += 1) press(pwr.stdin, undefined, { name: 'down' });
     press(pwr.stdin, undefined, { name: 'right' });
     assert.match(frameText(pwr.stdout), new RegExp(`> ${label}\\s+${showLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.match(frameText(pwr.stdout), /5h 38% ⇡19%/);
-    press(pwr.stdin, '\r', { name: 'return' });
+    press(pwr.stdin, 's', { name: 's', ctrl: true });
     assert.equal((await pwrResult).saved, true);
     assert.equal(pwrSaved.quotaPace, 'show');
     assert.equal(pwr.stdin.isRaw, false);
@@ -224,12 +237,13 @@ test('the editor configures the directory style and updates the live preview', a
       stdin, stdout, language,
       onSave: async (preferences) => { saved = preferences; },
     });
-    for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
+    openStyleTab(stdin);
+    for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
     press(stdin, undefined, { name: 'right' });
     assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${value}`));
     assert.doesNotMatch(frameText(stdout), /…\/atlas/);
     assert.match(frameText(stdout), /\batlas\b/);
-    press(stdin, '\r', { name: 'return' });
+    press(stdin, 's', { name: 's', ctrl: true });
     assert.equal((await result).saved, true);
     assert.equal(saved.dirStyle, 'name');
     assert.equal(stdin.isRaw, false);
@@ -249,9 +263,7 @@ test('the layout editor modifies widget, icon, and format on enabled segments wi
     onSave: async (preferences) => { saved = preferences; },
   });
 
-  // Open layout mode (field index 8 = segments)
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   assert.match(frameText(stdout), /Segment layout/);
 
   // Model (index 0) does NOT support multiple widgets, so widget control is hidden
@@ -341,8 +353,7 @@ test('the editor displays dynamic ring (gauge) as the default context widget in 
     stdin, stdout, language: 'zh',
     onSave: async () => {},
   });
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, 'e', { name: 'e' });
   const frame = frameText(stdout);
   assert.match(frame, /> 组件\s+默认 \(gauge\)\s+动态圆环/);
@@ -364,8 +375,7 @@ test('the layout editor supports Chinese single-block labels and r reset', async
     stdin, stdout, language: 'zh',
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   // Edit first enabled segment (quota.5h)
   press(stdin, 'e', { name: 'e' });
   assert.match(frameText(stdout), /编辑区块：5 小时配额/);
@@ -403,8 +413,9 @@ test('the editor preview wraps full styles on narrow terminals and resolves samp
   assert.match(initial, /\uf1c0 3:42 · 94% hit/);
   assert.match(initial, /\u{f0520} ▀▀▀▀▀▀▀▀ 7d 82% ⇡27% · 3d3h/u);
 
-  // Move to dirStyle (index 7) and switch to tilde (~) and short (~/s/atlas)
-  for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
+  // Move to Style -> dirStyle (index 6) and switch to tilde (~) and short (~/s/atlas)
+  openStyleTab(stdin);
+  for (let step = 0; step < 6; step += 1) press(stdin, undefined, { name: 'down' });
   press(stdin, undefined, { name: 'right' }); // name
   press(stdin, undefined, { name: 'right' }); // parent
   press(stdin, undefined, { name: 'right' }); // tilde
@@ -436,8 +447,7 @@ test('the editor enables and previews tps and cost.today with custom format temp
   assert.match(frameText(stdout), /\$8\.42 today/);
 
   // Open layout, edit tps (index 1), cycle format to include {ttft}
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, undefined, { name: 'down' });
   press(stdin, 'e', { name: 'e' });
   assert.match(frameText(stdout), /编辑区块：生成速度/);
@@ -464,7 +474,7 @@ test('every segment provides 3-5 unique Nerd Font icon alternatives and cycles c
     }
   }
 
-  // Verify cycling on cache (which previously had duplicate undefineds) and saving a Nerd Font preset icon
+  // Verify cycling on cache and saving a Nerd Font preset icon
   const { stdin, stdout } = terminal();
   stdout.columns = 120;
   stdout.rows = 32;
@@ -476,10 +486,8 @@ test('every segment provides 3-5 unique Nerd Font icon alternatives and cycles c
     stdin, stdout, language: 'zh',
     onSave: async (preferences) => { saved = preferences; },
   });
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, 'e', { name: 'e' });
-  // Cache now supports widget cycling (text -> bar -> gauge) as well as icons
   assert.match(frameText(stdout), /> 组件\s+默认 \(text\)/);
   press(stdin, undefined, { name: 'right' });
   assert.match(frameText(stdout), /> 组件\s+bar/);
@@ -510,20 +518,16 @@ test('the editor previews and configures the subagents tree and inline widgets',
     stdin, stdout, language: 'zh',
     onSave: async (preferences) => { saved = preferences; },
   });
-  // Main preview shows aligned subagent tree lines
   assert.match(frameText(stdout), /├ .*research · Codebase Reviewer/);
   assert.match(frameText(stdout), /└ .*explore · Dependency Audit/);
 
-  // Open layout, select subagents (index 1), press 'e' to edit
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, undefined, { name: 'down' });
   press(stdin, 'e', { name: 'e' });
   assert.match(frameText(stdout), /编辑区块：子代理/);
   assert.match(frameText(stdout), /> 组件\s+默认 \(tree\)\s+树形多行/);
-  assert.doesNotMatch(frameText(stdout), /模板/); // hidden in tree mode
+  assert.doesNotMatch(frameText(stdout), /模板/);
 
-  // Switch widget from tree -> inline: format control appears and preview becomes single-line summary
   press(stdin, undefined, { name: 'right' });
   assert.match(frameText(stdout), /> 组件\s+inline\s+单行汇总/);
   assert.match(frameText(stdout), /模板/);
@@ -547,9 +551,7 @@ test('the editor wraps git available fields cleanly, previews diff stats across 
     onSave: async (preferences) => { saved = preferences; },
   });
 
-  // Open layout -> select Git (index 1) -> edit
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, undefined, { name: 'down' });
   press(stdin, 'e', { name: 'e' });
 
@@ -559,7 +561,6 @@ test('the editor wraps git available fields cleanly, previews diff stats across 
   assert.match(initialFrame, /\{added\}/);
   assert.match(initialFrame, /\{deleted\}/);
 
-  // Move from icon -> format and cycle to first diff-stat combination
   press(stdin, undefined, { name: 'down' });
   press(stdin, undefined, { name: 'right' });
   assert.match(frameText(stdout), /main \* ↑1 2f08999 · 4f \+128 -34/);
@@ -582,19 +583,15 @@ test('the block editor cycles cache format presets to hit-only styles and saves'
     onSave: async (preferences) => { saved = preferences; },
   });
 
-  // Open layout -> edit cache
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   press(stdin, 'e', { name: 'e' });
   assert.match(frameText(stdout), /编辑区块：缓存/);
   assert.match(frameText(stdout), /> 组件\s+默认 \(text\)/);
 
-  // Move down twice: widget -> icon -> format
   press(stdin, undefined, { name: 'down' });
   press(stdin, undefined, { name: 'down' });
   assert.match(frameText(stdout), /> 模板\s+默认/);
 
-  // Cycle format: [{left}][{cold}][ · {hit}%] -> {hit}% hit -> {hit}%
   press(stdin, undefined, { name: 'right' });
   assert.match(frameText(stdout), /\uf1c0 3:42 · 94%/);
   press(stdin, undefined, { name: 'right' });
@@ -628,11 +625,12 @@ test('the editor switches layout mode on studio and dashboard with live preview 
       stdin, stdout, language,
       onSave: async (preferences) => { saved = preferences; },
     });
-    for (let step = 0; step < 9; step += 1) press(stdin, undefined, { name: 'down' });
+    openStyleTab(stdin);
+    for (let step = 0; step < 7; step += 1) press(stdin, undefined, { name: 'down' });
     assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${flatText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     press(stdin, undefined, { name: 'right' });
     assert.match(frameText(stdout), new RegExp(`> ${label}\\s+${customText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-    press(stdin, '\r', { name: 'return' });
+    press(stdin, 's', { name: 's', ctrl: true });
     assert.equal((await result).saved, true);
     assert.deepEqual(saved.layout, [[3, 0], [3, 0]]);
     assert.equal(stdin.isRaw, false);
@@ -650,13 +648,14 @@ test('the editor switches layout mode on studio and dashboard with live preview 
     stdin: dash.stdin, stdout: dash.stdout,
     onSave: async (preferences) => { dashSaved = preferences; },
   });
-  for (let step = 0; step < 9; step += 1) press(dash.stdin, undefined, { name: 'down' });
+  openStyleTab(dash.stdin);
+  for (let step = 0; step < 7; step += 1) press(dash.stdin, undefined, { name: 'down' });
   assert.match(frameText(dash.stdout), /> layout\s+preset \(3 rows \+ wrap\)/);
   press(dash.stdin, undefined, { name: 'right' });
   assert.match(frameText(dash.stdout), /> layout\s+custom \(3 rows \+ wrap\)/);
   press(dash.stdin, undefined, { name: 'right' });
   assert.match(frameText(dash.stdout), /> layout\s+auto wrap \(1 row\)/);
-  press(dash.stdin, '\r', { name: 'return' });
+  press(dash.stdin, 's', { name: 's', ctrl: true });
   assert.equal((await dashResult).saved, true);
   assert.equal(dashSaved.layout, 'flat');
 });
@@ -674,9 +673,7 @@ test('the layout panel breaks, merges, aligns, resets, and edits per-segment in 
     onSave: async (preferences) => { saved = preferences; },
   });
 
-  // Open layout (index 8)
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   assert.match(frameText(stdout), /── Row 1 \(auto wrap\) ──/);
   assert.match(frameText(stdout), /── Disabled ──/);
 
@@ -715,14 +712,11 @@ test('the layout panel breaks, merges, aligns, resets, and edits per-segment in 
     stdin: second.stdin, stdout: second.stdout,
     onSave: async (preferences) => { secondSaved = preferences; },
   });
-  for (let step = 0; step < 8; step += 1) press(second.stdin, undefined, { name: 'down' });
-  press(second.stdin, '\r', { name: 'return' });
+  openLayoutTab(second.stdin);
   for (let step = 0; step < 3; step += 1) press(second.stdin, undefined, { name: 'down' });
-  // Merge row 2 back into row 1
   press(second.stdin, 'b', { name: 'b' });
   assert.match(frameText(second.stdout), /── Row 1 \(auto wrap\) ──/);
   assert.doesNotMatch(frameText(second.stdout), /── Row 2 ──/);
-  // Break again, then reset with 'r'
   press(second.stdin, 'b', { name: 'b' });
   assert.match(frameText(second.stdout), /── Row 2 ──/);
   press(second.stdin, 'r', { name: 'r' });
@@ -744,8 +738,7 @@ test('the layout panel shows tree bottom tag for subagents in tree mode and hide
     stdin, stdout,
     onSave: async () => {},
   });
-  for (let step = 0; step < 8; step += 1) press(stdin, undefined, { name: 'down' });
-  press(stdin, '\r', { name: 'return' });
+  openLayoutTab(stdin);
   assert.match(frameText(stdout), /Subagents\s+enabled\s+row 1 left · tree \(bottom\)/);
   press(stdin, undefined, { name: 'down' });
   press(stdin, 'e', { name: 'e' });

@@ -18,9 +18,9 @@ A customizable status line and live-preview terminal editor for Antigravity CLI 
 
 ## Features
 
-- **Live-preview TUI editor**: bilingual (English / 简体中文), keyboard-driven, powered by the exact same renderer `agy` uses.
+- **Tabbed live-preview TUI studio**: bilingual (English / 简体中文), inspired by CCometixLine with **Presets** card gallery (live card previews, `✓ in use` badges, tag filters, partial layout/style apply, and custom saved presets), **Layout** editor, **Style** panel, and an interactive **Live Preview** bar with scenario switcher, width ruler, and simulated color depth / glyphs.
 - **Rich telemetry**: 18 built-in segments covering model, context ring/bar, prompt cache, Git diff stats, 5h/7d quota pace, TPS, session & daily spend, and an aligned subagent tree.
-- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in), 18 color palettes, Nerd / Unicode / ASCII icons, and hybrid multi-row layouts with full-fidelity per-row narrow-terminal wrapping.
+- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in) plus custom user presets, 18 color palettes, Nerd / Unicode / ASCII icons, and hybrid multi-row layouts with full-fidelity per-row narrow-terminal wrapping.
 - **Safe & standalone**: zero runtime dependencies; registers into `~/.gemini/antigravity-cli/settings.json` with automatic backup if replacing an existing status line.
 
 ## Quick Start
@@ -96,12 +96,15 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 
 | Key | Action |
 | :--- | :--- |
-| `↑` / `↓` (`j` / `k`) | Move between fields or segments |
-| `←` / `→` (`h` / `l`) | Cycle option values (including `layout` mode) |
-| `Enter` / `Space` | Open **segments** layout; inside layout, `Space` toggles a segment and `Enter` picks up / drops to reorder (`Esc` cancels move) |
-| `b` / `a` / `r` | Inside layout: `b` breaks/merges row before segment, `a` flips left/right alignment, `r` resets layout |
-| `e` or `→` | Edit an enabled segment's widget, icon, and format template (`r` resets to default) |
-| `Ctrl+S` / `q` | Save / cancel |
+| `←` / `→` (on tabs) | Switch between **Presets**, **Layout**, and **Style** (`↓` enters page, `Esc` / `↑` returns to tabs) |
+| **Presets**: `←→↑↓` / `Tab` | Browse preset cards & cycle tag filters (`all`, `mine`, `minimal`, `multi-line`, `powerline`, `quota`, `cache`, `context`) |
+| **Presets**: `Enter` / `L` / `S` | Apply full preset / apply layout only / apply style only |
+| **Presets**: `N` / `W` / `E` / `X` | Save current setup as a custom preset / replace / rename / delete user preset |
+| **Layout**: `↑↓` / `Space` / `Enter` | Select segment / toggle on-off / pick up & drop to reorder (`Esc` cancels move) |
+| **Layout**: `b` / `a` / `m` / `e` / `r` | Break/merge row (`b`), flip left/right (`a`), cycle mode (`m`), edit widget/icon/format (`e`), reset (`r`) |
+| **Style**: `↑↓` / `←→` | Select theme (with color swatches), skin, icons, color depth, context, quota pace, dir style, or layout mode |
+| **Preview**: `[` `]` / `-` `+` / `{` `}` | Cycle sample scenarios, adjust preview width & ruler, simulate color depth (`{`) and glyphs (`}`) |
+| Global: `^Z` `^Y` / `^P` / `?` / `^S` / `q` | Undo/redo / command palette / help / save / quit |
 
 ## Acknowledgments
 

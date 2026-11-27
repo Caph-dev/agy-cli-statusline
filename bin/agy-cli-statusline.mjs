@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { confirmReplace, runEditor, selectLanguage } from "../lib/editor.mjs";
-import { configRoot } from "../lib/paths.mjs";
+import { configRoot, presetsDir } from "../lib/paths.mjs";
 import {
   enumNames,
   normalizePreferences,
@@ -125,6 +125,7 @@ async function runDefault({ flags, root, stdin, stdout, stderr }) {
     stdin,
     stdout,
     language,
+    presetsDir: presetsDir(root),
     onSave: async (preferences) => {
       install(root, preferences, { sourceDir: SOURCE_DIR });
     },
