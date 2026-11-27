@@ -20,7 +20,7 @@
 
 - **多标签实时预览 TUI 工作室**：支持中英文切换，参考 CCometixLine 设计，提供 **预设** 卡片画廊（卡片实时渲染、`✓ 使用中` 状态标记、标签筛选、仅应用布局/样式及保存自定义预设）、**布局** 编排、**样式** 面板，以及底部支持场景切换、宽度标尺和模拟色深/图标集的 **实时预览** 栏。
 - **丰富的指标组件**：内置 18 个组件，覆盖模型、上下文圆环/进度条、提示缓存、Git 变更统计、5h/7d 配额速率、生成速率、会话与今日花费以及列对齐的子代理树。
-- **预设与主题**：提供 13 套预设（8 套 CCometixLine 预设 + 5 套内置预设）及自定义预设保存、18 套配色、Nerd / Unicode / ASCII 图标，以及**人为多行 + 窄终端行内自动无损折行**融合布局。
+- **预设与主题**：提供 14 套预设（8 套 CCometixLine 预设 + 6 套内置预设，含作者同款 `author`）及自定义预设保存、18 套配色、Nerd / Unicode / ASCII 图标，以及**人为多行 + 窄终端行内自动无损折行**融合布局。
 - **零依赖且安全安装**：无第三方运行时依赖；自动注册到 `~/.gemini/antigravity-cli/settings.json`，替换已有状态栏前会先询问并备份原配置。
 
 ## 快速开始
@@ -51,6 +51,7 @@ agy plugin install .
 
 ```sh
 agy-cli-statusline configure --show
+agy-cli-statusline configure --preset author
 agy-cli-statusline configure --preset dashboard --color-depth 256
 agy-cli-statusline configure --preset studio --segments "model,dir,git / context,cache,cost"
 agy-cli-statusline configure --preset studio --layout 3,2 --segments "model,dir,git,context,cost"
@@ -91,9 +92,9 @@ agy-cli-statusline preview --preset cometix
 
 ## 自定义与快捷键
 
-- **预设**：CCometixLine 预设（`cometix`、`minimal`、`dashboard`、`budget`、`cache-aware`、`focus`、`zen`、`powerline`）与内置预设（`studio`、`signal`、`compact`、`bracket`、`focus-legacy`）。
+- **预设**：CCometixLine 预设（`cometix`、`minimal`、`dashboard`、`budget`、`cache-aware`、`focus`、`zen`、`powerline`）与内置预设（`author`（作者同款）、`studio`、`signal`、`compact`、`bracket`、`focus-legacy`）。
 - **配色与外观**：13 套 CCometixLine 配色 + 5 套内置主题（`dusk`、`ink`、`paper`、`signal`、`mono`）；支持 `powerline`、`plain`、`compact`、`bracket`、`pill` 样式及 `auto`、`truecolor`、`256`、`16`、`none` 色深。
-- **人为多行 + 自动折行融合**：主面板**布局**支持在单行自动折行、预设多行与自定义多行之间切换；13 套预设均可自由指定强制换行和左右对齐，且每行超宽时仍各自独立无损折行。
+- **人为多行 + 自动折行融合**：主面板**布局**支持在单行自动折行、预设多行与自定义多行之间切换；14 套预设均可自由指定强制换行和左右对齐，且每行超宽时仍各自独立无损折行。
 - **单区块微调**：在布局编辑器中可为每个已启用区块单独调整组件形态、Nerd Font 备选图标或自定义字符，以及 `{field}` / `[...]` 模板。
 
 | 按键 | 功能 |

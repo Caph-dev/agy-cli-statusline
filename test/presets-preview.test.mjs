@@ -7,8 +7,11 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { clipAnsi, fitAnsi, stripAnsi, visibleWidth } from '../lib/ansi.mjs';
 import { confirmReplace, runEditor, selectLanguage } from '../lib/editor.mjs';
-import { normalizePreferences, presetRows } from '../lib/preferences.mjs';
-import { PresetLibrary, applyPreset, isPresetInUse, matchesPreset, slugifyPresetName } from '../lib/presets-library.mjs';
+import { normalizePreferences, presetHasStructuredLayout, presetRows } from '../lib/preferences.mjs';
+import { PresetLibrary, applyPreset, isPresetInUse, matchesPreset, presetTitle, slugifyPresetName } from '../lib/presets-library.mjs';
+import { renderLine } from '../lib/render.mjs';
+import { SAMPLE_GIT, SAMPLE_HOME, orchestratorSamplePayload, samplePayload } from '../lib/sample.mjs';
+import { collectSegments } from '../lib/segments.mjs';
 import { PreviewController } from '../lib/tui-preview.mjs';
 import { formatHints, styleKey } from '../lib/tui-ui.mjs';
 
@@ -512,4 +515,95 @@ test('orchestrator preview scenario shows live Executor model and cache-inclusiv
 
   press(stdin, 'q', { name: 'q' });
   await result;
+});
+
+test('author preset matches the author configuration byte-for-byte, degrades icons cleanly, and localizes in the editor', async () => {
+  assert.equal(presetHasStructuredLayout('author'), true);
+  const authorPrefs = normalizePreferences({ preset: 'author' });
+  assert.equal(presetRows(authorPrefs).length, 3);
+
+  const customPrefs = normalizePreferences({
+    preset: 'cometix',
+    theme: 'catppuccin-mocha',
+    skin: 'plain',
+    icons: 'nerd',
+    colorDepth: 'auto',
+    contextFormat: 'auto',
+    quotaPace: 'auto',
+    dirStyle: 'parent',
+    segments: [
+      'model', 'context', 'cache', 'tps',
+      'dir', 'git', 'worktree', 'state',
+      'quota.5h', 'quota.7d', 'cost', 'cost.today', 'subagents',
+    ],
+    layout: [[4, 0], [4, 0], [5, 0]],
+    items: {
+      worktree: { format: 'wt:{name}' },
+      model: { icon: '󰙴', format: '[{tag}: ]{active}[ {effort}]' },
+      dir: { format: '{parent}' },
+      tps: { format: '{tps} tok/s[ · med {median}]' },
+      state: { icon: '' },
+      git: { icon: '', format: '{branch}[ {ahead}][ {behind}][ · {files}f[ {added}][ {deleted}]]' },
+      'cost.today': { format: '{usd} today[ · {calls} calls]' },
+      cache: { format: '{hit}% hit[ · {read} read]' },
+      subagents: { icon: '' },
+      context: { format: '{pct}%[ · {tokens}[/{window}]]' },
+    },
+  });
+
+  const renderWith = (prefs, payload, width) => {
+    const segments = collectSegments(payload, prefs, SAMPLE_GIT, { home: SAMPLE_HOME, now: 1_700_000_000_000 });
+    return renderLine(segments, prefs, { width, color: true, env: { COLORTERM: 'truecolor' } });
+  };
+
+  for (const width of [160, 70]) {
+    for (const payload of [samplePayload(), orchestratorSamplePayload('planner')]) {
+      assert.equal(renderWith(authorPrefs, payload, width), renderWith(customPrefs, payload, width));
+    }
+  }
+
+  for (const icons of ['ascii', 'none']) {
+    const degraded = normalizePreferences({ preset: 'author', icons });
+    const rendered = stripAnsi(renderWith(degraded, samplePayload(), 160));
+    assert.doesNotMatch(rendered, /\p{Co}/u, `found PUA glyph in ${icons}: ${rendered}`);
+  }
+
+  const lib = new PresetLibrary();
+  const entry = lib.get('author');
+  assert.ok(entry);
+  assert.equal(presetTitle('author', 'en'), 'Author');
+  assert.equal(presetTitle('author', 'zh'), '作者同款');
+
+  const applied = applyPreset(normalizePreferences({ preset: 'cometix' }), entry, 'all');
+  assert.equal(matchesPreset(applied, entry), true);
+
+  const zenApplied = applyPreset(normalizePreferences({ preset: 'zen' }), entry, 'layout');
+  const zenPlain = stripAnsi(renderWith(zenApplied, samplePayload(), 160));
+  assert.doesNotMatch(zenPlain, /\p{Co}/u);
+
+  const { stdin, stdout } = terminal(118, 34);
+  let saved;
+  const result = runEditor({
+    preferences: normalizePreferences({ preset: 'cometix' }),
+    stdin,
+    stdout,
+    language: 'zh',
+    onSave: async (prefs) => { saved = prefs; },
+  });
+
+  press(stdin, 'p', { name: 'p', ctrl: true });
+  for (const ch of 'author') press(stdin, ch, {});
+  assert.match(frameText(stdout), /作者同款/);
+  press(stdin, '\r', { name: 'return' });
+
+  const afterApply = frameText(stdout);
+  assert.match(afterApply, /已应用预设 author/);
+
+  press(stdin, undefined, { name: 'down' });
+  for (let i = 0; i < 3; i += 1) press(stdin, '\t', { name: 'tab' });
+  assert.match(frameText(stdout), /作者同款/);
+
+  press(stdin, 's', { name: 's', ctrl: true });
+  assert.equal((await result).saved, true);
+  assert.equal(saved.preset, 'author');
 });

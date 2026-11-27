@@ -20,7 +20,7 @@ A customizable status line and live-preview terminal editor for Antigravity CLI 
 
 - **Tabbed live-preview TUI studio**: bilingual (English / 简体中文), inspired by CCometixLine with **Presets** card gallery (live card previews, `✓ in use` badges, tag filters, partial layout/style apply, and custom saved presets), **Layout** editor, **Style** panel, and an interactive **Live Preview** bar with scenario switcher, width ruler, and simulated color depth / glyphs.
 - **Rich telemetry**: 18 built-in segments covering model, context ring/bar, prompt cache, Git diff stats, 5h/7d quota pace, TPS, session & daily spend, and an aligned subagent tree.
-- **Presets & themes**: 13 presets (8 from CCometixLine + 5 built-in) plus custom user presets, 18 color palettes, Nerd / Unicode / ASCII icons, and hybrid multi-row layouts with full-fidelity per-row narrow-terminal wrapping.
+- **Presets & themes**: 14 presets (8 from CCometixLine + 6 built-in, including the author's setup `author`) plus custom user presets, 18 color palettes, Nerd / Unicode / ASCII icons, and hybrid multi-row layouts with full-fidelity per-row narrow-terminal wrapping.
 - **Safe & standalone**: zero runtime dependencies; registers into `~/.gemini/antigravity-cli/settings.json` with automatic backup if replacing an existing status line.
 
 ## Quick Start
@@ -51,6 +51,7 @@ In `agy`, type `/agy-cli-statusline-setup`, press `Tab` to complete to `/agy-cli
 
 ```sh
 agy-cli-statusline configure --show
+agy-cli-statusline configure --preset author
 agy-cli-statusline configure --preset dashboard --color-depth 256
 agy-cli-statusline configure --preset studio --segments "model,dir,git / context,cache,cost"
 agy-cli-statusline configure --preset studio --layout 3,2 --segments "model,dir,git,context,cost"
@@ -91,7 +92,7 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 
 ## Customization & Shortcuts
 
-- **Presets**: CCometixLine (`cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, `powerline`) and built-in (`studio`, `signal`, `compact`, `bracket`, `focus-legacy`).
+- **Presets**: CCometixLine (`cometix`, `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen`, `powerline`) and built-in (`author` — author's 3-row Catppuccin Mocha setup, `studio`, `signal`, `compact`, `bracket`, `focus-legacy`).
 - **Themes & appearance**: 13 CCometixLine palettes + 5 built-in themes (`dusk`, `ink`, `paper`, `signal`, `mono`); skins (`powerline`, `plain`, `compact`, `bracket`, `pill`); color depth (`auto`, `truecolor`, `256`, `16`, `none`).
 - **Multi-row + auto-wrap layouts**: switch `layout` between single-row auto-wrap, preset multi-row, and custom multi-row (any preset can define forced line breaks and left/right alignment, while each logical row still wraps independently on narrow terminals).
 - **Per-segment editing**: customize each enabled segment's widget, Nerd Font icon preset or custom glyph, and `{field}` / `[...]` format template directly in the layout editor.
