@@ -6,15 +6,18 @@ A customizable status line and live-preview terminal editor for Antigravity CLI 
 ![macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555555?style=flat-square)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-blue?style=flat-square)
 
-**English** · [简体中文](./README.zh-CN.md)
+**English** · [简体中文](https://github.com/Caph-dev/agy-cli-statusline/blob/main/README.zh-CN.md)
 
 ## Preview
 
-![Multi-row status line with context ring, cache hit, Git diff stats, quota pace bars, daily spend, and subagent tree](./assets/preview-full.jpg)
+![Multi-row status line with context ring, cache hit, Git diff stats, quota pace bars, daily spend, and subagent tree](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/preview-full-en.jpg)
 *Full layout with context ring, cache hit ratio, Git diff stats, worktree, TPS, 5h/7d quota pace bars, session & daily spend, and aligned subagent tree.*
 
-![Live agy session wrapping status line rows in a narrower terminal](./assets/preview-live.png)
+![Live agy session wrapping status line rows in a narrower terminal](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/preview-live.png)
 *Live `agy` session automatically wrapping overflowing rows onto additional lines at full fidelity.*
+
+![Interactive TUI studio showing the 14-preset gallery and live preview bar](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/editor-en.jpg)
+*Interactive TUI studio with the 14-preset card gallery, tag filters, `Author` preset, and real-time width-aware preview bar.*
 
 ## Features
 
@@ -114,4 +117,4 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 - [CCometixLine](https://github.com/Haleclipse/CCometixLine) by Haleclipse — presets, color palettes, ANSI color conversion, and prompt-cache metric design.
 - [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack) by ncdeng — local SQLite/protobuf telemetry reader, pricing table, TPS & daily cost estimation, cache-miss detection, and the aligned multi-line subagent tree component.
 
-See [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) for upstream source commits and MIT license texts.
+See [THIRD_PARTY_NOTICES.md](https://github.com/Caph-dev/agy-cli-statusline/blob/main/THIRD_PARTY_NOTICES.md) for upstream source commits and MIT license texts.

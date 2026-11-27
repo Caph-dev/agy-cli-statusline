@@ -6,15 +6,18 @@
 ![macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555555?style=flat-square)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-blue?style=flat-square)
 
-[English](./README.md) · **简体中文**
+[English](https://github.com/Caph-dev/agy-cli-statusline/blob/main/README.md) · **简体中文**
 
 ## 效果预览
 
-![包含上下文圆环、缓存命中率、Git 变更统计、配额速率条、今日费用与子代理树的多行状态栏预览](./assets/preview-full.jpg)
+![包含上下文圆环、缓存命中率、Git 变更统计、配额速率条、今日费用与子代理树的多行状态栏预览](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/preview-full-zh.jpg)
 *完整布局：包含上下文圆环、缓存命中率、Git 变更统计、工作树、生成速率、5h/7d 配额速率条、会话/今日费用与列对齐的子代理树。*
 
-![较窄终端下 agy 实时会话自动折行渲染效果](./assets/preview-live.png)
+![较窄终端下 agy 实时会话自动折行渲染效果](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/preview-live.png)
 *在较窄终端的 `agy` 实时会话中，超出宽度的状态栏会自动折行并保持完整样式。*
+
+![交互式 TUI 配置器：14 套预设卡片画廊与底部实时预览栏](https://raw.githubusercontent.com/Caph-dev/agy-cli-statusline/main/assets/editor-zh.jpg)
+*交互式 TUI 配置器：内置 14 套预设卡片画廊（含「作者同款」）、标签筛选与底部支持宽度标尺的实时预览栏。*
 
 ## 特性
 
@@ -114,4 +117,4 @@ agy-cli-statusline preview --preset cometix
 - [CCometixLine](https://github.com/Haleclipse/CCometixLine)（Haleclipse）—— 提供了预设方案、调色板、ANSI 色彩转换及提示缓存指标设计。
 - [agy-zh-pack](https://github.com/ncdeng/agy-zh-pack)（ncdeng）—— 提供了本机 SQLite / protobuf 遥测读取、API 价格表、TPS 与今日费用估算、缓存未命中检测及多行对齐子代理树组件。
 
-上游具体提交哈希与 MIT 许可证原文见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+上游具体提交哈希与 MIT 许可证原文见 [THIRD_PARTY_NOTICES.md](https://github.com/Caph-dev/agy-cli-statusline/blob/main/THIRD_PARTY_NOTICES.md)。
