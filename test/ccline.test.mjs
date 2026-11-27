@@ -765,6 +765,53 @@ test('context segment includes prompt cache read and creation tokens in used tok
   assert.equal(readOnlyOut, '25% · 50k/200k · 150k left');
 });
 
+test('context percentage prefers current_usage ratio over used_percentage and keeps cumulative totals as fallback only', () => {
+  const ratioPrefs = normalizePreferences({
+    preset: 'cometix',
+    icons: 'none',
+    segments: ['context'],
+    items: { context: { widget: 'text', format: '{pct}%[ · {tokens}[/{window}]][ · {left} left]' } },
+  });
+
+  // Divergent used_percentage (6.14% client estimate) vs actual current_usage (51,322 / 1,048,576 = 4.89% -> 5%)
+  const divergentPayload = {
+    context_window: {
+      used_percentage: 6.14,
+      current_usage: {
+        input_tokens: 2_286,
+        output_tokens: 1_144,
+        cache_read_input_tokens: 47_892,
+        cache_creation_input_tokens: 0,
+      },
+      context_window_size: 1_048_576,
+    },
+  };
+  const divergentOut = stripAnsi(renderLine(collectSegments(divergentPayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(divergentOut, '5% · 51.3k/1M · 997.3k left');
+
+  // When current_usage is absent, keep agy's used_percentage instead of cumulative totals
+  const cumulativeOnlyPayload = {
+    context_window: {
+      used_percentage: 6.14,
+      total_input_tokens: 800_000,
+      total_output_tokens: 50_000,
+      context_window_size: 1_048_576,
+    },
+  };
+  const cumulativeOut = stripAnsi(renderLine(collectSegments(cumulativeOnlyPayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(cumulativeOut, '6% · 850k/1M · 198.6k left');
+
+  // When current_usage is present but context_window_size is omitted, fall back to used_percentage
+  const noSizePayload = {
+    context_window: {
+      used_percentage: 68,
+      current_usage: { input_tokens: 340_000 },
+    },
+  };
+  const noSizeOut = stripAnsi(renderLine(collectSegments(noSizePayload, ratioPrefs), ratioPrefs, { width: 120, env: {} }));
+  assert.equal(noSizeOut, '68% · 340k');
+});
+
 test('model format presets render regular models, Orchestrator Planner/Executor states, unknown fallbacks, and ASCII arrows', () => {
   const renderModel = (payload, format, extra = {}) => {
     const prefs = normalizePreferences({
