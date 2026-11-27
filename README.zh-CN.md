@@ -61,6 +61,8 @@ agy-cli-statusline preview --preset cometix
 
 > 配置与独立渲染器副本保存在 `~/.gemini/antigravity-cli/agy-cli-statusline/`，清理 npm 缓存或卸载插件后状态栏仍可正常运行。如果终端未使用 Nerd Font，可将图标切换为 `unicode` 或 `ascii`。
 
+> **推荐配合的 `agy` 设置：** 使用多行布局（尤其是窄屏动态折行或启用 `subagents` 树形列表）时，建议在 `agy` 中运行 `/config`，将 **Rendering Mode** 切换为 **`no flickering (altscreen)`**（或在 `~/.gemini/antigravity-cli/settings.json` 中添加 `"altScreenMode": "always"`）。开启后状态栏会始终贴底显示，可避免默认 inline 模式下高频重绘闪烁以及内容折叠/行数变化后下方留出多余空白行的问题。
+
 ## 内置组件
 
 | 组件 ID | 名称 | 简介 |

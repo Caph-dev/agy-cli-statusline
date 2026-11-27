@@ -61,6 +61,8 @@ Use `/` inside `--segments` for forced line breaks (and optional `|` for left/ri
 
 > Preferences and a self-contained renderer copy live in `~/.gemini/antigravity-cli/agy-cli-statusline/`, so the footer keeps working even if npm's cache is cleared or the plugin is uninstalled. Switch `icons` to `unicode` or `ascii` if your terminal does not use a Nerd Font.
 
+> **Recommended `agy` setting:** For multi-line layouts (especially with dynamic wrapping or the `subagents` tree), open `/config` in `agy` and set **Rendering Mode** to **`no flickering (altscreen)`** (or add `"altScreenMode": "always"` to `~/.gemini/antigravity-cli/settings.json`). This keeps the status line anchored to the bottom of the terminal without flicker or trailing blank lines left by inline-mode redraws.
+
 ## Segments
 
 | Segment | Description |
