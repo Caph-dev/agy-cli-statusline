@@ -406,7 +406,7 @@ test('the editor preview wraps full styles on narrow terminals and resolves samp
     onSave: async () => {},
   });
   const initial = frameText(stdout);
-  assert.match(initial, /\uef23 Gemini 2\.5 Pro high/);
+  assert.match(initial, /\uef23 Gemini 4 Neon XHigh/);
   assert.match(initial, /\u{f0aa0} 42% · 84k tokens/u);
   assert.doesNotMatch(initial, /▰|▱/);
   assert.match(initial, /\u{f024b} ~\/…\/atlas/u);

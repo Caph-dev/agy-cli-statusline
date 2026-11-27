@@ -14,14 +14,14 @@ function renderAt(options, width, { color = false, payload = samplePayload(), gi
 
 test('narrow terminals wrap overflowing rows at full fidelity without degrading or dropping segments', () => {
   const full = renderAt({ preset: 'zen' }, 120);
-  assert.equal(full, 'Gemini 2.5 Pro high | ctx 42% | cache 3:42 | $1.284');
+  assert.equal(full, 'Gemini 4 Neon XHigh | ctx 42% | cache 3:42 | $1.284');
 
   for (const width of [50, 35]) {
     const wrapped = renderAt({ preset: 'zen' }, width);
     const lines = wrapped.split('\n');
     assert.ok(lines.length >= 2, wrapped);
     for (const line of lines) assert.ok(visibleWidth(line) <= width, `${width}: ${line}`);
-    assert.match(wrapped, /Gemini 2\.5 Pro high/);
+    assert.match(wrapped, /Gemini 4 Neon XHigh/);
     assert.match(wrapped, /ctx 42%/);
     assert.match(wrapped, /cache 3:42/);
     assert.match(wrapped, /\$1\.284/);
@@ -31,14 +31,14 @@ test('narrow terminals wrap overflowing rows at full fidelity without degrading 
 test('multi-side rows wrap cleanly and keep full bars and labels instead of degrading', () => {
   // focus row 0: context (20-cell eighths bar) on left, model on right
   const wide = renderAt({ preset: 'focus' }, 100).split('\n')[0];
-  assert.match(wide, /42% · 84k.*Gemini 2\.5 Pro high/);
+  assert.match(wide, /42% · 84k.*Gemini 4 Neon XHigh/);
 
   const wrapped = renderAt({ preset: 'focus' }, 40);
   const lines = wrapped.split('\n');
   assert.ok(lines.length >= 3, wrapped);
   for (const line of lines) assert.ok(visibleWidth(line) <= 40, line);
   assert.match(lines[0], /◔.*▏ 42% · 84k/);
-  assert.match(lines[1], /^\s+◆ Gemini 2\.5 Pro high$/);
+  assert.match(lines[1], /^\s+◆ Gemini 4 Neon XHigh$/);
   assert.match(lines[2], /≈ 3:42 · 94% hit/);
 });
 
@@ -66,7 +66,7 @@ test('wrapping preserves icons, bars, dir styles, git SHA, quota pace, and all s
   const cometixLines = cometix.split('\n');
   assert.ok(cometixLines.length >= 3, cometix);
   for (const line of cometixLines) assert.ok(visibleWidth(line) <= 66, line);
-  assert.match(cometix, /\uef23 Gemini 2\.5 Pro high/);
+  assert.match(cometix, /\uef23 Gemini 4 Neon XHigh/);
   assert.match(cometix, /\u{f0aa0} 42% · 84k tokens/u);
   assert.doesNotMatch(cometix, /▰|▱/); // cometix uses dynamic ring gauge for context even when layout is flat
   assert.match(cometix, /\uf1c0 3:42 · 94% hit/);
@@ -113,14 +113,14 @@ test('hybrid manual multi-row layout preserves row breaks while wrapping each ov
   // Wide terminal strictly keeps 2 manual rows
   const wideLines = renderAt(twoRowStudio, 120).split('\n');
   assert.equal(wideLines.length, 2);
-  assert.match(wideLines[0], /^Gemini 2\.5 Pro high · ~\/…\/atlas · main \* \+1 2f08999$/);
+  assert.match(wideLines[0], /^Gemini 4 Neon XHigh · ~\/…\/atlas · main \* \+1 2f08999$/);
   assert.match(wideLines[1], /^◑ 42% · 3:42 · 94% hit · \$1\.284$/);
 
   // Narrow terminal (width 36) wraps Row 1 onto 2 lines AND starts Row 2 cleanly on its own new line
   const narrowLines = renderAt(twoRowStudio, 36).split('\n');
   assert.ok(narrowLines.length >= 3, narrowLines.join('\n'));
   for (const line of narrowLines) assert.ok(visibleWidth(line) <= 36, line);
-  assert.equal(narrowLines[0], 'Gemini 2.5 Pro high · ~/…/atlas');
+  assert.equal(narrowLines[0], 'Gemini 4 Neon XHigh · ~/…/atlas');
   assert.equal(narrowLines[1], 'main * +1 2f08999');
   assert.match(narrowLines[2], /^◑ 42%/);
 
@@ -143,7 +143,7 @@ test('hybrid manual multi-row layout preserves row breaks while wrapping each ov
   const splitWide = renderAt(splitPrefs, 100).split('\n');
   assert.equal(splitWide.length, 2);
   assert.equal(visibleWidth(splitWide[0]), 100);
-  assert.match(splitWide[0], /^Gemini 2\.5 Pro high · ~\/…\/atlas\s+\$1\.284$/);
+  assert.match(splitWide[0], /^Gemini 4 Neon XHigh · ~\/…\/atlas\s+\$1\.284$/);
   assert.match(splitWide[1], /^◑ 42% · 3:42 · 94% hit$/);
 
   const splitNarrow = renderAt(splitPrefs, 30).split('\n');

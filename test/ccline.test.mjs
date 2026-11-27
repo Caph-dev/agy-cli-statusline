@@ -653,7 +653,7 @@ test('custom multi-row layout works across built-in and upstream presets and val
   ]);
   const studioOut = stripAnsi(render(studioTwoRow, samplePayload(), 160)).split('\n');
   assert.equal(studioOut.length, 2);
-  assert.match(studioOut[0], /Gemini 2\.5 Pro high.*atlas.*main/);
+  assert.match(studioOut[0], /Gemini 4 Neon XHigh.*atlas.*main/);
   assert.match(studioOut[1], /42%.*\$1\.284.*editing/);
 
   const signalSplit = normalizePreferences({
