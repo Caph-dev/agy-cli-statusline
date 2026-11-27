@@ -218,6 +218,26 @@ test('installed renderer computes live tps, cache stats, session cost fallback, 
   }));
   // Warm countdown (~4:50), 17% hit, 200 tok/s, $1.560 session, $1.56 today
   assert.match(output, /4:[345]\d · 17% hit/);
+
+  // A partial payload must keep the session ratio and the last SQLite call.
+  // Call 2 is 100k read / 500k prompt = 20%, while the session is 100k/600k = 17%.
+  // The 42k window snapshot must not replace 100k read.
+  const prefsPath = join(f.directory, 'agy-cli-statusline', 'statusline.json');
+  const prefs = JSON.parse(readFileSync(prefsPath, 'utf8'));
+  prefs.segments = ['cache'];
+  prefs.items = { cache: { format: '{hit}% hit[ · {read} read]' } };
+  writeFileSync(prefsPath, JSON.stringify(prefs));
+  const stable = succeeded(f.render({
+    conversation_id: convId,
+    model: { display_name: 'Gemini 4 Neon' },
+    prompt_cache: { warm: true, ttl: '5m', expires_in_seconds: 280 },
+    context_window: {
+      current_usage: { input_tokens: 8_000, cache_read_input_tokens: 42_000, cache_creation_input_tokens: 0 },
+    },
+    terminal_width: 140,
+  }));
+  assert.match(stable, /17% hit · 100k read/);
+  assert.doesNotMatch(stable, /20% hit|42k/);
   assert.match(output, /200 tok\/s/);
   assert.match(output, /\$1\.560/);
   assert.match(output, /\$1\.56 today/);

@@ -251,9 +251,9 @@ test('quota windows display reset countdowns even at zero usage or right after r
 
 test('cache segment aligns with CCometixLine warm/cold countdown, hit ratio, misses, cause, rewarm, and bar/gauge widgets', () => {
   const baseNow = 1_790_812_800_000;
-  const renderCache = (options, payload, width = 160) => {
+  const renderCache = (options, payload, width = 160, telemetry = null) => {
     const prefs = normalizePreferences(options);
-    const segs = collectSegments(payload, prefs, null, { now: baseNow });
+    const segs = collectSegments(payload, prefs, null, { now: baseNow, telemetry });
     return {
       segs,
       text: stripAnsi(renderLine(segs, prefs, { width, color: false, env: {} })),
@@ -362,6 +362,202 @@ test('cache segment aligns with CCometixLine warm/cold countdown, hit ratio, mis
     { ...warmPayload, context_window: { current_usage: { cache_read_input_tokens: 120_988 } } },
   );
   assert.match(custom.text, /3:42 · rewarm \$1\.14 · 121k read/);
+
+  // Session hit stays on the payload ratio. {read} stays on the last SQLite call,
+  // even when that call's own ratio is 50% and current_usage is a different 42k snapshot.
+  // A payload that only carries hit_ratio must not hide the DB last_read.
+  const stableRead = renderCache(
+    {
+      preset: 'author',
+      segments: ['cache'],
+      items: { cache: { format: '{hit}% hit[ · {read} read]' } },
+    },
+    {
+      prompt_cache: {
+        warm: true,
+        caching_observed: true,
+        ttl: '5m',
+        expires_at: 1_790_813_022,
+        requests: 41,
+        hit_ratio: 0.88,
+      },
+      context_window: {
+        current_usage: {
+          input_tokens: 8_000,
+          cache_read_input_tokens: 42_000,
+          cache_creation_input_tokens: 1_200,
+        },
+      },
+    },
+    160,
+    { cache: { last_read: 109_300, last_input: 109_300, last_created: 0, caching_observed: true } },
+  );
+  assert.equal(stableRead.segs[0].fields.hit, '88');
+  assert.equal(stableRead.segs[0].fields.read, '109.3k');
+  assert.match(stableRead.text, /88% hit · 109\.3k read/);
+  assert.doesNotMatch(stableRead.text, /50% hit|42k/);
+
+  // A payload that only says the cache is warm must not replace the session ratio
+  // with the last call's own 50% ratio, or rebuild rewarm from the window snapshot.
+  const partialPayload = renderCache(
+    {
+      preset: 'author',
+      segments: ['cache'],
+      items: { cache: { format: '[{left}][ · {hit}% hit][ · {read} read][ · rewarm {rewarm}]' } },
+    },
+    {
+      model: { id: 'gemini-4-neon', display_name: 'Gemini 4 Neon' },
+      prompt_cache: { warm: true, expires_at: 1_790_813_022, ttl: '5m' },
+      context_window: {
+        current_usage: {
+          input_tokens: 8_000,
+          cache_read_input_tokens: 42_000,
+          cache_creation_input_tokens: 200_000,
+        },
+      },
+    },
+    160,
+    {
+      cache: {
+        hit_ratio: 0.88,
+        requests: 41,
+        last_read: 109_300,
+        caching_observed: true,
+        rewarm_usd: 0.33,
+      },
+    },
+  );
+  assert.equal(partialPayload.segs[0].fields.hit, '88');
+  assert.equal(partialPayload.segs[0].fields.read, '109.3k');
+  assert.equal(partialPayload.segs[0].fields.rewarm, '$0.33');
+  assert.match(partialPayload.text, /88% hit · 109\.3k read · rewarm \$0\.33/);
+  assert.doesNotMatch(partialPayload.text, /50%|42k/);
+
+  // warm:true alone must not blank the SQLite countdown or miss count.
+  // warm:false stays authoritative even when SQLite still has time left.
+  const warmOnly = renderCache(
+    {
+      preset: 'cache-aware',
+      segments: ['cache'],
+    },
+    { prompt_cache: { warm: true } },
+    160,
+    {
+      cache: {
+        warm: true,
+        caching_observed: true,
+        ttl: '5m',
+        expires_at: 1_790_813_022,
+        requests: 41,
+        misses: 3,
+        hit_ratio: 0.88,
+        last_read: 109_300,
+        last_created: 1_200,
+        last_miss_cause: { causes: ['tools_changed'] },
+      },
+    },
+  );
+  const warmOnlyCache = warmOnly.segs.find((segment) => segment.id === 'cache');
+  assert.equal(warmOnlyCache.fields.left, '3:42');
+  assert.equal(warmOnlyCache.fields.hit, '88');
+  assert.equal(warmOnlyCache.fields.misses, '3');
+  assert.equal(warmOnlyCache.fields.read, '109.3k');
+  assert.equal(warmOnlyCache.fields.created, '1.2k');
+  assert.match(warmOnly.text, /3:42/);
+  assert.match(warmOnly.text, /88% hit · 3× miss · last: tools changed/);
+  assert.doesNotMatch(warmOnly.text, /cold/);
+
+  // A record with only last_created still renders, and does not borrow the window snapshot.
+  const createdOnly = renderCache(
+    {
+      preset: 'author',
+      segments: ['cache'],
+      items: { cache: { format: 'cache {read} read[ · {created} created]' } },
+    },
+    {
+      prompt_cache: { last_created: 1_200 },
+      context_window: { current_usage: { cache_read_input_tokens: 42_000, cache_creation_input_tokens: 9_000 } },
+    },
+  );
+  assert.equal(createdOnly.segs[0].fields.read, null);
+  assert.equal(createdOnly.segs[0].fields.created, '1.2k');
+  assert.match(createdOnly.text, /cache 1\.2k created/);
+  assert.doesNotMatch(createdOnly.text, /42k|9k/);
+
+  // A live payload countdown wins over an already-expired SQLite expires_at.
+  const freshCountdown = renderCache(
+    {
+      preset: 'cometix',
+      segments: ['cache'],
+      items: { cache: { format: '[{left}][{cold}][ · {hit}% hit]' } },
+    },
+    { prompt_cache: { expires_in_seconds: 280 } },
+    160,
+    { cache: { warm: false, expires_at: 1, ttl: '5m', hit_ratio: 0.88, requests: 4, last_read: 109_300 } },
+  );
+  assert.equal(freshCountdown.segs[0].fields.left, '4:40');
+  assert.equal(freshCountdown.segs[0].fields.state, 'warm');
+  assert.match(freshCountdown.text, /4:40 · 88% hit/);
+
+  // SQLite can contradict itself: warm:false plus a future expires_at stays cold
+  // when the payload says nothing about either field. An unparseable payload
+  // expiry does not hide that SQLite countdown.
+  const sqliteCold = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    { prompt_cache: { expires_at: 'soon', hit_ratio: 0.5, requests: 2 } },
+    160,
+    { cache: { warm: false, expires_at: 1_790_813_022, ttl: '5m', hit_ratio: 0.88, requests: 4 } },
+  );
+  assert.equal(sqliteCold.segs[0].fields.state, 'cold');
+  assert.match(sqliteCold.text, /cold · 50% hit/);
+
+  const sqliteCountdown = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    { prompt_cache: { expires_at: 'soon', hit_ratio: 0.5, requests: 2 } },
+    160,
+    { cache: { warm: true, expires_at: 1_790_813_022, ttl: '5m', hit_ratio: 0.88, requests: 4 } },
+  );
+  assert.equal(sqliteCountdown.segs[0].fields.left, '3:42');
+  assert.equal(sqliteCountdown.segs[0].fields.state, 'warm');
+  assert.match(sqliteCountdown.text, /3:42 · 50% hit/);
+
+  const forcedCold = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    { prompt_cache: { warm: false } },
+    160,
+    { cache: { warm: true, expires_at: 1_790_813_022, ttl: '5m', hit_ratio: 0.88, requests: 4 } },
+  );
+  assert.equal(forcedCold.segs[0].fields.state, 'cold');
+  assert.match(forcedCold.text, /cold · 88% hit/);
+
+  // An explicit payload opt-out stays hidden even when SQLite observed caching.
+  const hidden = renderCache(
+    { preset: 'cometix', segments: ['cache'] },
+    { prompt_cache: { caching_observed: false, warm: true } },
+    160,
+    { cache: { caching_observed: true, hit_ratio: 0.88, requests: 4, last_read: 109_300 } },
+  );
+  assert.equal(hidden.segs.length, 0);
+
+  // Without a last call, {read} still falls back to the context-window snapshot.
+  const snapshotRead = renderCache(
+    {
+      preset: 'author',
+      segments: ['cache'],
+      items: { cache: { format: '{hit}% hit[ · {read} read]' } },
+    },
+    {
+      context_window: {
+        current_usage: {
+          input_tokens: 63_382,
+          cache_read_input_tokens: 20_857,
+          cache_creation_input_tokens: 0,
+        },
+      },
+    },
+  );
+  assert.equal(snapshotRead.segs[0].fields.hit, '25');
+  assert.equal(snapshotRead.segs[0].fields.read, '20.9k');
 
   // cache-aware preset keeps 1-to-1 layout counts with unique segments
   const awarePrefs = normalizePreferences({ preset: 'cache-aware' });

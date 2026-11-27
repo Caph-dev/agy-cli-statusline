@@ -342,6 +342,10 @@ test('summarizeConversationCache computes session hit ratio, warm/cold TTL, miss
   assert.deepEqual(warmSummary.last_miss_cause, { causes: ['compaction'] });
   // sum(cr) = 140k, sum(inp+cr+cw) = 290k -> 140/290 = 0.4827...
   assert.equal(Math.round(warmSummary.hit_ratio * 100), 48);
+  // {read} is the last call only (40k), not the 140k session sum and not a window snapshot
+  assert.equal(warmSummary.last_read, 40_000);
+  assert.equal(warmSummary.last_input, 5_000);
+  assert.equal(warmSummary.last_created, 0);
   // rewarm: 45k tokens * $3/M = $0.135 -> $0.14
   assert.equal(formatMoney(warmSummary.rewarm_usd), '$0.14');
 
