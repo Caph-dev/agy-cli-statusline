@@ -25,5 +25,8 @@
     "validate:plugin": "agy plugin validate --strict .",
     "prepublishOnly": "npm test"
   },
-  "keywords": ["antigravity", "agy", "statusline", "terminal"]
+  "keywords": ["antigravity", "agy", "statusline", "terminal"],
+  "publishConfig": {
+    "access": "public"
+  }
 }
